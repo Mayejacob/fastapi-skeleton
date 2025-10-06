@@ -1,0 +1,48 @@
+fastapi-skeleton/
+├── app/
+│   ├── __init__.py
+│   ├── api/
+│   │   ├── __init__.py
+│   │   └── v1/
+│   │       ├── __init__.py
+│   │       ├── endpoints/
+│   │       │   ├── __init__.py
+│   │       │   └── user.py  # Example user endpoints
+│   │       └── router.py  # Main API router
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── config.py  # Environment variables
+│   │   ├── dependencies.py  # Dependency injection
+│   │   ├── responses.py  # Reusable API responses
+│   │   └── security.py  # JWT and auth logic
+│   ├── db/
+│   │   ├── __init__.py
+│   │   ├── base.py  # SQLAlchemy base model
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   └── user.py  # Example User model
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   └── user.py  # Pydantic schemas for User
+│   │   └── session.py  # DB engine and session
+│   ├── services/
+│   │   ├── __init__.py
+│   │   └── email.py  # Email service
+│   └── utils/
+│       ├── __init__.py
+│       ├── caching.py  # Cache (in-memory or Redis)
+│       └── logging.py  # Logging setup
+├── migrations/
+│   ├── env.py  # Alembic config
+│   ├── script.py.mako  # Migration template
+│   └── versions/  # Migration scripts
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py  # Test fixtures
+│   └── test_api.py  # Example tests
+├── .env.example
+├── .gitignore
+├── alembic.ini  # Alembic configuration
+├── main.py  # App entry point
+├── README.md
+└── requirements.txt
