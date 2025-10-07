@@ -1,35 +1,29 @@
 import asyncio
-from logging import log
 from logging.config import fileConfig
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
-from app.core.config import settings
 
 from alembic import context
 
-database_url = settings.DATABASE_URL
+# Load settings early
+from app.core.config import settings
 
+# Alembic Config
 config = context.config
-config.set_main_option("sqlalchemy.url", database_url)
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
+# Set DB URL (only once)
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+
+# Logging setup (optional)
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Add your model's MetaData object here for 'autogenerate' support.
-# In our case, it's from app.db.base
-from app.db.base import Base
+# Metadata from models (now registered via app/db/__init__.py)
+from app.db import Base
 
 target_metadata = Base.metadata
-
-# Other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 
 def do_run_migrations(connection: Connection) -> None:
@@ -40,11 +34,7 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    """Run migrations in 'online' mode with async engine.
-
-    In this scenario we need to create an AsyncEngine
-    and associate a connection with the context.
-    """
+    """Run migrations in 'online' mode with async engine."""
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
@@ -58,14 +48,7 @@ async def run_async_migrations() -> None:
 
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode.
-
-    This is the easiest way to test an upgrade/downgrade
-    with a database that already exists. This will not
-    perform the blank migration at the beginning of the
-    versioning scheme that's present for the first database
-    migration.
-    """
+    """Run migrations in 'offline' mode."""
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,

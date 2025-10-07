@@ -1,0 +1,10 @@
+{% extends "email/base.html" %}
+
+{% block title %}Welcome to {{ app_name }}!{% endblock %}
+
+{% block content %}
+    <h2>Hello, {{ user_name }}!</h2>
+    <p>Welcome to {{ app_name }}. We're excited to have you on board.</p>
+    <p>Your account has been created successfully. Start exploring <a href="{{ app_url }}">here</a>.</p>
+    <p>Best regards,<br>The {{ app_name }} Team</p>
+{% endblock %}

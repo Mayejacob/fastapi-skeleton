@@ -1,10 +1,15 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    create_async_engine,
+    async_sessionmaker,
+)  # Added async_sessionmaker import
 
 from app.db.base import Base
 from app.db.session import SessionLocal
-from app.main import app
+from main import app
+from app.core.dependencies import get_db  # Import the actual dependency function
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -35,5 +40,5 @@ def client():
         async with TestSessionLocal() as session:
             yield session
 
-    app.dependency_overrides[app.core.dependencies.get_db] = override_get_db
+    app.dependency_overrides[get_db] = override_get_db  # Use the imported get_db
     return TestClient(app)

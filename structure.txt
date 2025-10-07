@@ -36,6 +36,10 @@ fastapi-skeleton/
 │   ├── env.py  # Alembic config
 │   ├── script.py.mako  # Migration template
 │   └── versions/  # Migration scripts
+├── templates/
+│   └── email/
+│       ├── base.html
+│       └── welcome.html
 ├── tests/
 │   ├── __init__.py
 │   ├── conftest.py  # Test fixtures
