@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+
+
+{% block title %}
+  Verify Your {{ app_name }} Account
+{% endblock %}
+
+{% block content %}
+  <h2>Hello, {{ user_name }}!</h2>
+  <p>
+    Thank you for registering. Please verify your email by clicking <a href="{{ verify_url }}">here</a>.
+  </p>
+  <p>If the button doesn't work, copy this link: {{ verify_url }}</p>
+  <p>Best, The {{ app_name }} Team</p>
+{% endblock %}

@@ -1,5 +1,5 @@
 from typing import Annotated
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -41,9 +41,7 @@ async def register(user: UserCreate, db: DBDependency):
     # Check existing
     existing = await db.execute(select(User).where(User.email == user.email))
     if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=400, detail=send_error("Email already registered").model_dump()
-        )
+        raise HTTPException(status_code=400, detail="Email already registered")
 
     hashed_password = get_password_hash(user.password)
     db_user = User(
@@ -80,14 +78,11 @@ async def verify_account(request: VerifyRequest, db: DBDependency):
     )
     db_user = user.scalar_one_or_none()
     if not db_user:
-        raise HTTPException(
-            status_code=400,
-            detail=send_error("Invalid token or already verified").model_dump(),
-        )
+        raise HTTPException(status_code=400, detail="Email already registered")
 
     # Mark as active and set timestamp
     db_user.is_active = True
-    db_user.email_verified_at = datetime.utcnow()
+    db_user.email_verified_at = datetime.now(timezone.utc)
     # Mark token used (optional: delete token)
     await db.commit()
     await db.refresh(db_user)
@@ -102,12 +97,10 @@ async def login(form_data: LoginRequest, db: DBDependency):
     if not db_user or not verify_password(form_data.password, db_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=send_error("Incorrect username or password").model_dump(),
+            detail="Incorrect username or password",
         )
     if not db_user.is_active:
-        raise HTTPException(
-            status_code=400, detail=send_error("Account not verified").model_dump()
-        )
+        raise HTTPException(status_code=400, detail="Account not verified")
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
@@ -123,9 +116,7 @@ async def forgot_password(request: ForgotPasswordRequest, db: DBDependency):
     user = await db.execute(select(User).where(User.email == request.email))
     db_user = user.scalar_one_or_none()
     if not db_user:
-        raise HTTPException(
-            status_code=404, detail=send_error("Email not found").model_dump()
-        )
+        raise HTTPException(status_code=404, detail="Email not found")
 
     # Generate and store token
     token = create_reset_token(db_user.email)
@@ -151,19 +142,17 @@ async def reset_password(request: ResetRequest, db: DBDependency):
     user = await db.execute(select(User).where(User.email == email))
     db_user = user.scalar_one_or_none()
     if not db_user:
-        raise HTTPException(
-            status_code=400, detail=send_error("Invalid token").model_dump()
-        )
+        raise HTTPException(status_code=400, detail="Invalid token")
 
     # Update password and mark token used
     db_user.hashed_password = get_password_hash(request.new_password)
-    db_user.updated_at = datetime.utcnow()
+    db_user.updated_at = datetime.now(timezone.utc)
     token = await db.execute(
         select(PasswordResetToken).where(PasswordResetToken.token == request.token)
     )
     reset_token = token.scalar_one_or_none()
     if reset_token:
-        reset_token.used_at = datetime.utcnow()
+        reset_token.used_at = datetime.now(timezone.utc)
         db.add(reset_token)
     await db.commit()
 
@@ -179,7 +168,7 @@ async def read_users_me(current_user: Annotated[dict, Depends(get_current_user)]
 async def test_cache(db: DBDependency):
     # Simple cache test: Store/retrieve a value
     key = "test_key"
-    value = {"timestamp": datetime.utcnow().isoformat(), "message": "Cached!"}
+    value = {"timestamp": datetime.now(timezone.utc).isoformat(), "message": "Cached!"}
 
     # Get
     cached = await cache.get(key, db=db)

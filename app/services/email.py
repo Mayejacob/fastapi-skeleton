@@ -1,10 +1,9 @@
 import aiosmtplib
 from email.message import EmailMessage
-from jinja2 import Environment, FileSystemLoader, select_autoescape  # For templating
-
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 from app.core.config import settings
+import re
 
-# Jinja2 setup
 env = Environment(
     loader=FileSystemLoader("templates/emails"),
     autoescape=select_autoescape(["html", "xml"]),
@@ -14,11 +13,9 @@ env = Environment(
 async def send_email(
     to: str,
     subject: str,
-    template: str | None = None,  # e.g., "welcome"
-    context: (
-        dict | None
-    ) = None,  # e.g., {"user_name": "John", "app_name": settings.APP_NAME}
-    body: str | None = None,  # Fallback plain text
+    template: str | None = None,
+    context: dict | None = None,
+    body: str | None = None,
 ):
     message = EmailMessage()
     message["From"] = settings.EMAIL_FROM
@@ -26,27 +23,32 @@ async def send_email(
     message["Subject"] = subject
 
     if template:
-        # Render HTML template with context (defaults from settings)
+        # Prepare context
         template_context = {
-            **{
-                "app_name": settings.APP_NAME,
-                "app_url": settings.APP_URL,
-                "year": "2025",
-            },
+            "app_name": settings.APP_NAME,
+            "app_url": settings.APP_URL,
+            "year": "2025",
             **(context or {}),
         }
+
+        # Render HTML template
         html_body = env.get_template(f"{template}.html").render(template_context)
-        message.add_alternative(html_body, subtype="html")
+
+        # Generate plain text fallback
         if not body:
-            # Auto-generate plain text from HTML (simple strip, or use pandoc if needed)
-            body = (
-                html_body.replace("<[^>]*>", "").replace("\n\n", "\n").strip()
-            )  # Basic HTML-to-text
+            # Strip HTML tags to create a readable text version
+            body = re.sub(r"<[^>]+>", "", html_body).strip()
+
+        # Add plain text first
+        message.set_content(body)
+
+        # Then add HTML version
+        message.add_alternative(html_body, subtype="html")
     else:
-        body = body or "No content provided."
+        # Only plain text
+        message.set_content(body or "No content provided.")
 
-    message.set_content(body)
-
+    # Send the email
     smtp = aiosmtplib.SMTP(
         hostname=settings.EMAIL_HOST, port=settings.EMAIL_PORT, use_tls=True
     )

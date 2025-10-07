@@ -78,7 +78,9 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=send_error(
-            message=str(exc), status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            message="An unexpected error occurred.",  # safer than showing raw `str(exc)`
+            data={"detail": str(exc)},
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         ).model_dump(),
     )
 
