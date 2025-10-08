@@ -3,7 +3,7 @@ set -e
 
 echo "🚀 Starting deployment process..."
 echo "🧩 Running Alembic migrations..."
-alembic upgrade head || echo "⚠️ Alembic migration failed — continuing anyway."
+alembic upgrade head
 
 echo "🔥 Starting Gunicorn server..."
-exec gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:$PORT
+exec gunicorn -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:$PORT
