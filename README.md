@@ -125,3 +125,14 @@ Apply migrations with `alembic upgrade head`.
 - **Security:** JWT tokens are validated with a secret key. Generate one with `openssl rand -hex 32`.
 - **Extensibility:** Add new models, schemas, and endpoints by following the `user.py` examples.
 - **Rate Limiting:** Install `slowapi` and add middleware if needed (not included by default to keep it lightweight).
+
+## Live Demo
+
+You can view the website here: [https://fastapi-skeleton-nsr7.onrender.com](https://fastapi-skeleton-nsr7.onrender.com)
+
+## About Me
+
+**Jacob Olorunmaye**
+
+- GitHub: [Mayejacob](https://github.com/Mayejacob)
+- Website: [mayeconcept.com.ng](https://mayeconcept.com.ng)
