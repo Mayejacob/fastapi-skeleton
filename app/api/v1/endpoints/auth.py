@@ -37,35 +37,49 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=UserResponse)
-async def register(user: UserCreate, db: DBDependency):
-    # Check existing
-    existing = await db.execute(select(User).where(User.email == user.email))
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    hashed_password = get_password_hash(user.password)
-    db_user = User(
-        username=user.username,
-        email=user.email,
-        hashed_password=hashed_password,
-        is_active=False,
+async def register(user_data: UserCreate, db: DBDependency):
+    # Check if username or email already exists
+    existing_user = await db.execute(
+        select(User).where(
+            (User.username == user_data.username) | (User.email == user_data.email)
+        )
     )
-    db.add(db_user)
+    existing_user = existing_user.scalar_one_or_none()
+
+    if existing_user:
+        if existing_user.username == user_data.username:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken"
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered",
+            )
+    # Proceed with creating the user
+    hashed_password = get_password_hash(user_data.password)  # Assuming you have this
+    new_user = User(
+        username=user_data.username,
+        email=user_data.email,
+        hashed_password=hashed_password,
+        # Other fields...
+    )
+    db.add(new_user)
     await db.commit()
-    await db.refresh(db_user)
+    await db.refresh(new_user)
 
     # Send verification email
-    token = create_verification_token(user.email)
+    token = create_verification_token(user_data.email)
     verify_url = f"{settings.APP_URL}/auth/verify?token={token}"
     await send_email(
-        to=user.email,
+        to=user_data.email,
         subject=f"Verify Your {settings.APP_NAME} Account",
-        template="verify",
-        context={"user_name": user.username, "verify_url": verify_url},
+        template="verify.html",
+        context={"user_name": user_data.username, "verify_url": verify_url},
     )
 
     return send_success(
-        data=UserResponse.model_validate(db_user),
+        data=UserResponse.model_validate(new_user),
         message="User registered. Check email to verify.",
     ).model_dump()
 

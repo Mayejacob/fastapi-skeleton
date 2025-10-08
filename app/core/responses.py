@@ -2,6 +2,7 @@ from typing import Any, Generic, TypeVar
 
 from fastapi import status
 from pydantic import BaseModel
+from fastapi.responses import JSONResponse
 
 T = TypeVar("T")
 
@@ -29,3 +30,8 @@ def send_error(
     return APIResponse(
         success=False, message=message, data=data, status_code=status_code
     )
+
+
+# Optional: A helper to create JSONResponse
+def create_json_response(content: dict, status_code: int) -> JSONResponse:
+    return JSONResponse(content=content, status_code=status_code)

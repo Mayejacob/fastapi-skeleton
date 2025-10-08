@@ -2,6 +2,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 import secrets  # For key generation if needed
 
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True)
@@ -27,6 +31,10 @@ class Settings(BaseSettings):
     EMAIL_USERNAME: str
     EMAIL_PASSWORD: str
     EMAIL_FROM: str
+    MAIL_STARTTLS: bool = True
+    MAIL_SSL_TLS: bool = False
+    TEMPLATE_FOLDER: str = str(BASE_DIR / "templates" / "emails")
+    SUPPRESS_SEND: int = 0
     LOG_LEVEL: str = "INFO"
     LOG_FILE_PATH: str = "logs/app.log"
 

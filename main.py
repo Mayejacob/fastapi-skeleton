@@ -18,6 +18,9 @@ import os
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
 from app.core.responses import APIResponse, send_error, send_success
+from sqlalchemy.exc import IntegrityError, NoResultFound
+from jinja2 import TemplateNotFound
+from fastapi_mail.errors import ConnectionErrors
 
 # Early fallback logger for startup errors (before settings/Loguru)
 os.makedirs("logs", exist_ok=True)
@@ -59,12 +62,12 @@ app.add_middleware(
 )
 
 
-# @app.middleware("http")
-# async def log_requests(request: Request, call_next):
-#     logger = get_logger()
-#     logger.info(f"Request: {request.method} {request.url}")
-#     response = await call_next(request)
-#     return response
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    logger = get_logger()
+    logger.info(f"Request: {request.method} {request.url}")
+    response = await call_next(request)
+    return response
 
 
 @app.exception_handler(Exception)
@@ -109,6 +112,37 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
+# Handler for integrity errors (e.g., unique violations)
+@app.exception_handler(IntegrityError)
+async def integrity_exception_handler(request: Request, exc: IntegrityError):
+    logger = get_logger()
+    detail = str(exc.orig) if hasattr(exc, "orig") else "Database integrity error"
+    logger.error(f"Integrity error for {request.method} {request.url}: {detail}")
+
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content=send_error(
+            message=detail,
+            data=None,
+        ).model_dump(),
+    )
+
+
+# Handler for not found (e.g., resource missing)
+@app.exception_handler(NoResultFound)
+async def not_found_exception_handler(request: Request, exc: NoResultFound):
+    logger = get_logger()
+    logger.warning(f"Resource not found for {request.method} {request.url}")
+
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content=send_error(
+            message="Resource not found",
+            data=None,
+        ).model_dump(),
+    )
+
+
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     logger = get_logger()
@@ -119,6 +153,45 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         status_code=exc.status_code,
         content=send_error(
             message=exc.detail, status_code=exc.status_code
+        ).model_dump(),
+    )
+
+
+# Catch missing templates (Jinja2)
+@app.exception_handler(TemplateNotFound)
+async def template_not_found_handler(request: Request, exc: TemplateNotFound):
+    logger = get_logger()
+    logger.error(
+        f"Template not found: '{exc.name}' while processing {request.method} {request.url}\n"
+        f"Traceback: {traceback.format_exc()}"
+    )
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=send_error(
+            message="Email template missing or misconfigured.",
+            data={
+                "template": exc.name,
+                "hint": "Ensure the template file exists in the correct folder.",
+            },
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        ).model_dump(),
+    )
+
+
+# Catch email connection errors (FastAPI-Mail)
+@app.exception_handler(ConnectionErrors)
+async def mail_connection_error_handler(request: Request, exc: ConnectionErrors):
+    logger = get_logger()
+    logger.error(
+        f"Mail connection error for {request.method} {request.url}: {str(exc)}\n"
+        f"Traceback: {traceback.format_exc()}"
+    )
+    return JSONResponse(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        content=send_error(
+            message="Email service unavailable.",
+            data={"detail": str(exc)},
+            status_code=status.HTTP_502_BAD_GATEWAY,
         ).model_dump(),
     )
 
