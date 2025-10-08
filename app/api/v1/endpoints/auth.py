@@ -36,7 +36,7 @@ from app.core.config import settings
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=UserResponse)
+@router.post("/register")
 async def register(user_data: UserCreate, db: DBDependency):
     # Check if username or email already exists
     existing_user = await db.execute(
@@ -65,7 +65,7 @@ async def register(user_data: UserCreate, db: DBDependency):
         # Other fields...
     )
     db.add(new_user)
-    await db.commit()
+    await db.flush()
     await db.refresh(new_user)
 
     # Send verification email
@@ -78,8 +78,10 @@ async def register(user_data: UserCreate, db: DBDependency):
         context={"user_name": user_data.username, "verify_url": verify_url},
     )
 
+    response_data = UserResponse.model_validate(new_user)
+
     return send_success(
-        data=UserResponse.model_validate(new_user),
+        data=response_data,
         message="User registered. Check email to verify.",
     ).model_dump()
 

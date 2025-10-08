@@ -21,6 +21,8 @@ from app.core.responses import APIResponse, send_error, send_success
 from sqlalchemy.exc import IntegrityError, NoResultFound
 from jinja2 import TemplateNotFound
 from fastapi_mail.errors import ConnectionErrors
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 
 # Early fallback logger for startup errors (before settings/Loguru)
 os.makedirs("logs", exist_ok=True)
@@ -214,12 +216,16 @@ async def lifespan(app: FastAPI):
 
 app.router.lifespan_context = lifespan  # Attach to app
 
+templates = Jinja2Templates(directory="templates")
 
-@app.get("/")
-async def root():
-    from app.core.responses import send_success
 
-    return send_success(message=f"Welcome to {settings.APP_NAME}!").model_dump()
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+
+    return templates.TemplateResponse(
+        "frontend/home.html",
+        {"request": request, "app_name": settings.APP_NAME},
+    )
 
 
 # Example health check

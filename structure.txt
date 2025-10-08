@@ -32,6 +32,9 @@ fastapi-skeleton/
 │       ├── __init__.py
 │       ├── caching.py  # Cache (in-memory or Redis)
 │       └── logging.py  # Logging setup
+├── logs/
+│   ├── app.log  
+│   ├── startup.log
 ├── migrations/
 │   ├── env.py  # Alembic config
 │   ├── script.py.mako  # Migration template
