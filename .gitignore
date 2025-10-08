@@ -5,5 +5,5 @@ __pycache__/
 .env
 logs/
 *.log
-migrations/versions/*
+# migrations/versions/*
 *.sqlite
