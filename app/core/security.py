@@ -10,6 +10,7 @@ from jwt.exceptions import InvalidTokenError
 import bcrypt
 from pydantic import BaseModel
 import hashlib  # Added for SHA-256
+from random import randint
 
 from itsdangerous import URLSafeTimedSerializer
 
@@ -121,3 +122,16 @@ def verify_reset_token(token: str, max_age_hours: int = 1) -> str:
         return email
     except:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
+    
+# account verification code
+
+def generate_verification_code() -> str:
+    return f"{randint(100000, 999999)}"  # 6-digit code
+
+def hash_verification_code(code: str) -> str:
+    return bcrypt.hashpw(code.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_verification_code(stored_hash: str, provided_code: str) -> bool:
+    if not stored_hash or not provided_code:
+        return False
+    return bcrypt.checkpw(provided_code.encode('utf-8'), stored_hash.encode('utf-8'))

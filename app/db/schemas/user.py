@@ -22,7 +22,9 @@ class UserResponse(UserBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-
+class VerifyRequest(BaseModel):
+    email: EmailStr
+    code: str  # 6-digit code
 # New: Login
 class LoginRequest(BaseModel):
     username: str

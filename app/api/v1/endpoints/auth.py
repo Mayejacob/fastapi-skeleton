@@ -17,6 +17,8 @@ from app.core.security import (
     verify_verification_token,
     create_reset_token,
     verify_reset_token,
+    generate_verification_code,
+    hash_verification_code,
 )
 from app.db.models.user import User
 from app.db.models.tokens import EmailVerificationToken, PasswordResetToken
@@ -57,25 +59,40 @@ async def register(user_data: UserCreate, db: DBDependency):
                 detail="Email already registered",
             )
     # Proceed with creating the user
-    hashed_password = get_password_hash(user_data.password)  # Assuming you have this
+    hashed_password = get_password_hash(user_data.password)
+    verification_code = generate_verification_code()
+    hashed_code = hash_verification_code(verification_code)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)  # 15-min expiration
+
     new_user = User(
         username=user_data.username,
         email=user_data.email,
         hashed_password=hashed_password,
-        # Other fields...
+        verification_code=hashed_code,
+        verification_code_expires_at=expires_at,
     )
     db.add(new_user)
     await db.flush()
     await db.refresh(new_user)
 
     # Send verification email
-    token = create_verification_token(user_data.email)
-    verify_url = f"{settings.APP_URL}/auth/verify?token={token}"
+    # token = create_verification_token(user_data.email)
+    # verify_url = f"{settings.APP_URL}/auth/verify?token={token}"
+    # await send_email(
+    #     to=user_data.email,
+    #     subject=f"Verify Your {settings.APP_NAME} Account",
+    #     template="verify.html",
+    #     context={"user_name": user_data.username, "verify_url": verify_url},
+    # )
+
     await send_email(
         to=user_data.email,
         subject=f"Verify Your {settings.APP_NAME} Account",
         template="verify.html",
-        context={"user_name": user_data.username, "verify_url": verify_url},
+        context={
+            "user_name": user_data.username,
+            "verification_code": verification_code,
+        },
     )
 
     response_data = UserResponse.model_validate(new_user)
@@ -86,20 +103,26 @@ async def register(user_data: UserCreate, db: DBDependency):
     ).model_dump()
 
 
-@router.post("/verify", response_model=dict)
+@router.post("/verify")
 async def verify_account(request: VerifyRequest, db: DBDependency):
-    email = verify_verification_token(request.token)
     user = await db.execute(
-        select(User).where(and_(User.email == email, User.is_active == False))
+        select(User).where(and_(User.email == request.email, User.is_active == False))
     )
     db_user = user.scalar_one_or_none()
     if not db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="Invalid email or already verified")
+
+    if db_user.verification_code_expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Verification code expired")
+
+    if not verify_verification_code(db_user.verification_code, request.code):
+        raise HTTPException(status_code=400, detail="Invalid verification code")
 
     # Mark as active and set timestamp
     db_user.is_active = True
     db_user.email_verified_at = datetime.now(timezone.utc)
-    # Mark token used (optional: delete token)
+    db_user.verification_code = None  # Clear code
+    db_user.verification_code_expires_at = None
     await db.commit()
     await db.refresh(db_user)
 

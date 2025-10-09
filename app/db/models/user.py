@@ -28,3 +28,9 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+    # New fields
+    verification_code: Mapped[str] = mapped_column(String, nullable=True)
+    verification_code_expires_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
