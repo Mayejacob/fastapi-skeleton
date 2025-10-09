@@ -18,7 +18,8 @@ from app.core.security import (
     create_reset_token,
     verify_reset_token,
     generate_verification_code,
-    hash_verification_code,
+    hash_verification_code,verify_verification_code
+    
 )
 from app.db.models.user import User
 from app.db.models.tokens import EmailVerificationToken, PasswordResetToken
@@ -123,7 +124,7 @@ async def verify_account(request: VerifyRequest, db: DBDependency):
     db_user.email_verified_at = datetime.now(timezone.utc)
     db_user.verification_code = None  # Clear code
     db_user.verification_code_expires_at = None
-    await db.commit()
+    # await db.commit()
     await db.refresh(db_user)
 
     return send_success(message="Account verified successfully!").model_dump()
