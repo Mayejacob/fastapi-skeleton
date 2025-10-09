@@ -22,9 +22,12 @@ class UserResponse(UserBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class VerifyRequest(BaseModel):
     email: EmailStr
     code: str  # 6-digit code
+
+
 # New: Login
 class LoginRequest(BaseModel):
     username: str
@@ -38,7 +41,8 @@ class Token(BaseModel):
 
 # New: Verify/Reset
 class VerifyRequest(BaseModel):
-    token: str
+    email: EmailStr
+    code: str
 
 
 class ResetRequest(BaseModel):

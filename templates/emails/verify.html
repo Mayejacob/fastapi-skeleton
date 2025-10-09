@@ -8,8 +8,19 @@
 {% block content %}
   <h2>Hello, {{ user_name }}!</h2>
   <p>
-    Thank you for registering. Please verify your email by clicking <a href="{{ verify_url }}">here</a>.
+    Thank you for registering with {{ app_name }}. To complete your registration and activate your account, please verify your email address using the code below:
   </p>
-  <p>If the button doesn't work, copy this link: {{ verify_url }}</p>
-  <p>Best, The {{ app_name }} Team</p>
+  <p>
+    <strong>Verification Code:</strong> {{ verification_code }}
+  </p>
+  <p>
+    <small>This code will expire by: {{ verification_code_expires_at }}</small>
+  </p>
+  <p>
+    Enter this code on the verification page to confirm your email. If you did not create an account with us, please ignore this message.
+  </p>
+  <p>
+    If you have any questions or need assistance, feel free to contact our support team.
+  </p>
+  <p>Best regards,<br>The {{ app_name }} Team</p>
 {% endblock %}

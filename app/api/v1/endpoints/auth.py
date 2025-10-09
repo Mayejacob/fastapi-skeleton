@@ -18,8 +18,8 @@ from app.core.security import (
     create_reset_token,
     verify_reset_token,
     generate_verification_code,
-    hash_verification_code,verify_verification_code
-    
+    hash_verification_code,
+    verify_verification_code,
 )
 from app.db.models.user import User
 from app.db.models.tokens import EmailVerificationToken, PasswordResetToken
@@ -77,14 +77,6 @@ async def register(user_data: UserCreate, db: DBDependency):
     await db.refresh(new_user)
 
     # Send verification email
-    # token = create_verification_token(user_data.email)
-    # verify_url = f"{settings.APP_URL}/auth/verify?token={token}"
-    # await send_email(
-    #     to=user_data.email,
-    #     subject=f"Verify Your {settings.APP_NAME} Account",
-    #     template="verify.html",
-    #     context={"user_name": user_data.username, "verify_url": verify_url},
-    # )
 
     await send_email(
         to=user_data.email,
@@ -93,6 +85,7 @@ async def register(user_data: UserCreate, db: DBDependency):
         context={
             "user_name": user_data.username,
             "verification_code": verification_code,
+            "verification_code_expires_at": expires_at
         },
     )
 
@@ -114,7 +107,7 @@ async def verify_account(request: VerifyRequest, db: DBDependency):
         raise HTTPException(status_code=400, detail="Invalid email or already verified")
 
     if db_user.verification_code_expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=400, detail="Verification code expired")
+        raise HTTPException(status_code=400, detail="Verification code expired, kindly request a fresh verification code")
 
     if not verify_verification_code(db_user.verification_code, request.code):
         raise HTTPException(status_code=400, detail="Invalid verification code")
@@ -122,7 +115,7 @@ async def verify_account(request: VerifyRequest, db: DBDependency):
     # Mark as active and set timestamp
     db_user.is_active = True
     db_user.email_verified_at = datetime.now(timezone.utc)
-    db_user.verification_code = None  # Clear code
+    db_user.verification_code = None  
     db_user.verification_code_expires_at = None
     # await db.commit()
     await db.refresh(db_user)
