@@ -111,6 +111,7 @@ Run tests: `pytest`
    - Enable `RATE_LIMIT_ENABLED=true` for security.
    - Use a WSGI/ASGI server like Gunicorn + Uvicorn:  
      `gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker`
+   - the Render’s Start Command `./start.sh`
 
 ## Additional Setup for Migrations
 

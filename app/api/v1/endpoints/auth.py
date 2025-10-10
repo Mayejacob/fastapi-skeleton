@@ -74,6 +74,7 @@ async def register(user_data: UserCreate, db: DBDependency):
     )
     db.add(new_user)
     await db.flush()
+    await db.commit()
     await db.refresh(new_user)
 
     # Send verification email
@@ -85,7 +86,7 @@ async def register(user_data: UserCreate, db: DBDependency):
         context={
             "user_name": user_data.username,
             "verification_code": verification_code,
-            "verification_code_expires_at": expires_at
+            "verification_code_expires_at": expires_at,
         },
     )
 
@@ -94,7 +95,7 @@ async def register(user_data: UserCreate, db: DBDependency):
     return send_success(
         data=response_data,
         message="User registered. Check email to verify.",
-    ).model_dump()
+    )
 
 
 @router.post("/verify")
@@ -104,89 +105,176 @@ async def verify_account(request: VerifyRequest, db: DBDependency):
     )
     db_user = user.scalar_one_or_none()
     if not db_user:
-        raise HTTPException(status_code=400, detail="Invalid email or already verified")
+        return send_error(status_code=400, message="Invalid email or already verified")
 
     if db_user.verification_code_expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=400, detail="Verification code expired, kindly request a fresh verification code")
+        return send_error(
+            status_code=400,
+            message="Verification code expired, kindly request a fresh verification code",
+        )
 
     if not verify_verification_code(db_user.verification_code, request.code):
-        raise HTTPException(status_code=400, detail="Invalid verification code")
+        return send_error(
+            status_code=400,
+            message="Invalid verification code",
+        )
 
     # Mark as active and set timestamp
     db_user.is_active = True
     db_user.email_verified_at = datetime.now(timezone.utc)
-    db_user.verification_code = None  
+    db_user.verification_code = None
     db_user.verification_code_expires_at = None
-    # await db.commit()
+    await db.commit()
     await db.refresh(db_user)
 
-    return send_success(message="Account verified successfully!").model_dump()
+    userData = UserResponse.model_validate(db_user)
+    response = {"user": userData}
+    return send_success(message="Account verified successfully!", data=response)
 
 
-@router.post("/login", response_model=Token)
+@router.post("/resend_verification_code")
+async def resendVerificationCode(form_data: ForgotPasswordRequest, db: DBDependency):
+    user = await db.execute(select(User).where(User.email == form_data.email))
+    db_user = user.scalar_one_or_none()
+    if not db_user:
+        return send_error(
+            message="invalid email address", status_code=status.HTTP_400_BAD_REQUEST
+        )
+    if db_user.is_active == True:
+        return send_error(message="Account has been previously verified")
+
+    verification_code = generate_verification_code()
+    hashed_code = hash_verification_code(verification_code)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)  # 15-min expiration
+
+    db_user.verification_code = hashed_code
+    db_user.verification_code_expires_at = expires_at
+    await db.commit()
+    await db.refresh(db_user)
+
+    await send_email(
+        to=db_user.email,
+        subject=f"Your New {settings.APP_NAME} Verification Code",
+        template="verify.html",
+        context={
+            "user_name": db_user.username,
+            "verification_code": verification_code,
+            "verification_code_expires_at": expires_at,
+        },
+    )
+
+    return send_success(
+        message="A verification code has been sent to your email address"
+    )
+
+
+@router.post("/login")
 async def login(form_data: LoginRequest, db: DBDependency):
-    user = await db.execute(select(User).where(User.username == form_data.username))
+    user = await db.execute(select(User).where(User.email == form_data.email))
     db_user = user.scalar_one_or_none()
     if not db_user or not verify_password(form_data.password, db_user.hashed_password):
-        raise HTTPException(
+        return send_error(
+            message="Incorrect email or password",
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
         )
     if not db_user.is_active:
-        raise HTTPException(status_code=400, detail="Account not verified")
+        return send_error(
+            message="Account is yet to be verified, kindly verify your account",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": db_user.username}, expires_delta=access_token_expires
+        data={"sub": db_user.email}, expires_delta=access_token_expires
     )
+    userData = UserResponse.model_validate(db_user)
+    response = {"access_token": access_token, "token_type": "bearer", "user": userData}
     return send_success(
-        data={"access_token": access_token, "token_type": "bearer"}
-    ).model_dump()
+        message="Login successful",
+        data=response,
+    )
 
 
 @router.post("/forgot-password")
 async def forgot_password(request: ForgotPasswordRequest, db: DBDependency):
     user = await db.execute(select(User).where(User.email == request.email))
     db_user = user.scalar_one_or_none()
-    if not db_user:
-        raise HTTPException(status_code=404, detail="Email not found")
 
-    # Generate and store token
-    token = create_reset_token(db_user.email)
-    reset_token = PasswordResetToken(token=token, user_id=db_user.id)
+    if not db_user:
+        return send_error(
+            message="Invalid email address", status_code=status.HTTP_404_NOT_FOUND
+        )
+
+    user_id = db_user.id
+    user_email = db_user.email
+    user_name = db_user.username
+
+    # Generate and store reset code (not URL)
+    reset_code = generate_verification_code()
+    hashed_code = hash_verification_code(reset_code)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+
+    reset_token = PasswordResetToken(
+        token=hashed_code,
+        user_id=user_id,
+        expires_at=expires_at,
+    )
+
     db.add(reset_token)
     await db.commit()
 
-    # Send email
-    reset_url = f"{settings.APP_URL}/auth/reset-password?token={token}"
     await send_email(
-        to=db_user.email,
+        to=user_email,
         subject=f"Reset Your {settings.APP_NAME} Password",
-        template="reset",
-        context={"user_name": db_user.username, "reset_url": reset_url},
+        template="reset.html",
+        context={
+            "user_name": user_name,
+            "reset_code": reset_code,
+            "reset_code_expires_at": expires_at,
+        },
     )
 
-    return send_success(message="Password reset email sent.").model_dump()
-
+    return send_success(message="Password reset email sent successfully.")
 
 @router.post("/reset-password")
 async def reset_password(request: ResetRequest, db: DBDependency):
-    email = verify_reset_token(request.token)
-    user = await db.execute(select(User).where(User.email == email))
-    db_user = user.scalar_one_or_none()
-    if not db_user:
-        raise HTTPException(status_code=400, detail="Invalid token")
+    # Find user by email
+    user_query = await db.execute(select(User).where(User.email == request.email))
+    db_user = user_query.scalar_one_or_none()
 
-    # Update password and mark token used
+    if not db_user:
+        return send_error(message="Invalid email address", status_code=status.HTTP_404_NOT_FOUND)
+
+    # Find the most recent password reset token for this user
+    token_query = await db.execute(
+        select(PasswordResetToken)
+        .where(PasswordResetToken.user_id == db_user.id)
+        .order_by(PasswordResetToken.created_at.desc())
+    )
+    reset_token = token_query.scalar_one_or_none()
+
+    if not reset_token:
+        return send_error(message="No reset code found for this user.", status_code=status.HTTP_400_BAD_REQUEST)
+
+    # Verify the reset code
+    if not verify_hashed_code(request.verification_code, reset_token.token):
+        return send_error(message="Invalid verification code.", status_code=status.HTTP_400_BAD_REQUEST)
+
+    # Check expiry and usage
+    if reset_token.expires_at < datetime.now(timezone.utc):
+        return send_error(message="Reset code has expired.", status_code=status.HTTP_400_BAD_REQUEST)
+
+    if reset_token.used_at is not None:
+        return send_error(message="This reset code has already been used.", status_code=status.HTTP_400_BAD_REQUEST)
+
+    # Update password
     db_user.hashed_password = get_password_hash(request.new_password)
     db_user.updated_at = datetime.now(timezone.utc)
-    token = await db.execute(
-        select(PasswordResetToken).where(PasswordResetToken.token == request.token)
-    )
-    reset_token = token.scalar_one_or_none()
-    if reset_token:
-        reset_token.used_at = datetime.now(timezone.utc)
-        db.add(reset_token)
+
+    # Mark token as used
+    reset_token.used_at = datetime.now(timezone.utc)
+
+    db.add_all([db_user, reset_token])
     await db.commit()
 
     return send_success(message="Password reset successfully.").model_dump()

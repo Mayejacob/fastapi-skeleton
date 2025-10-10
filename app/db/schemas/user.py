@@ -30,7 +30,7 @@ class VerifyRequest(BaseModel):
 
 # New: Login
 class LoginRequest(BaseModel):
-    username: str
+    email: str
     password: str
 
 
@@ -46,7 +46,8 @@ class VerifyRequest(BaseModel):
 
 
 class ResetRequest(BaseModel):
-    token: str
+    email: EmailStr
+    verification_code: str
     new_password: str = PydanticField(..., min_length=8, max_length=72)
 
 

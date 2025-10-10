@@ -46,7 +46,13 @@ class PasswordResetToken(Base):
         server_default=func.now() + timedelta(hours=1),
     )
     used_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
-
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    
     # Relationship
     user: Mapped["User"] = relationship("User", back_populates="reset_tokens")
 
