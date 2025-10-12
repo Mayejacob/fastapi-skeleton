@@ -9,4 +9,5 @@ class CacheEntry(Base):
     id = Column(Integer, primary_key=True, index=True)
     key = Column(String, unique=True, index=True, nullable=False)
     value = Column(String, nullable=False)  # Store as JSON string if complex
-    expires_at = Column(DateTime, nullable=True)
+    # expires_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime(timezone=True))

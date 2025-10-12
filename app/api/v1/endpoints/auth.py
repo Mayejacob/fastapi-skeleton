@@ -35,6 +35,8 @@ from app.db.schemas.user import (
 from app.services.email import send_email
 from app.utils.caching import cache
 from app.core.config import settings
+from sqlalchemy import delete
+
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -209,6 +211,10 @@ async def forgot_password(request: ForgotPasswordRequest, db: DBDependency):
     user_email = db_user.email
     user_name = db_user.username
 
+    await db.execute(
+        delete(PasswordResetToken).where(PasswordResetToken.user_id == db_user.id)
+    )
+    await db.commit()
     # Generate and store reset code (not URL)
     reset_code = generate_verification_code()
     hashed_code = hash_verification_code(reset_code)
@@ -236,6 +242,7 @@ async def forgot_password(request: ForgotPasswordRequest, db: DBDependency):
 
     return send_success(message="Password reset email sent successfully.")
 
+
 @router.post("/reset-password")
 async def reset_password(request: ResetRequest, db: DBDependency):
     # Find user by email
@@ -243,29 +250,42 @@ async def reset_password(request: ResetRequest, db: DBDependency):
     db_user = user_query.scalar_one_or_none()
 
     if not db_user:
-        return send_error(message="Invalid email address", status_code=status.HTTP_404_NOT_FOUND)
+        return send_error(
+            message="Invalid email address", status_code=status.HTTP_404_NOT_FOUND
+        )
 
-    # Find the most recent password reset token for this user
     token_query = await db.execute(
         select(PasswordResetToken)
         .where(PasswordResetToken.user_id == db_user.id)
         .order_by(PasswordResetToken.created_at.desc())
+        .limit(1)
     )
     reset_token = token_query.scalar_one_or_none()
 
     if not reset_token:
-        return send_error(message="No reset code found for this user.", status_code=status.HTTP_400_BAD_REQUEST)
+        return send_error(
+            message="No reset code found for this user.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
 
     # Verify the reset code
-    if not verify_hashed_code(request.verification_code, reset_token.token):
-        return send_error(message="Invalid verification code.", status_code=status.HTTP_400_BAD_REQUEST)
+    if not verify_verification_code(reset_token.token, request.verification_code):
+        return send_error(
+            message="Invalid verification code.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
 
     # Check expiry and usage
     if reset_token.expires_at < datetime.now(timezone.utc):
-        return send_error(message="Reset code has expired.", status_code=status.HTTP_400_BAD_REQUEST)
+        return send_error(
+            message="Reset code has expired.", status_code=status.HTTP_400_BAD_REQUEST
+        )
 
     if reset_token.used_at is not None:
-        return send_error(message="This reset code has already been used.", status_code=status.HTTP_400_BAD_REQUEST)
+        return send_error(
+            message="This reset code has already been used.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
 
     # Update password
     db_user.hashed_password = get_password_hash(request.new_password)
@@ -280,7 +300,7 @@ async def reset_password(request: ResetRequest, db: DBDependency):
     return send_success(message="Password reset successfully.").model_dump()
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me")
 async def read_users_me(current_user: Annotated[dict, Depends(get_current_user)]):
     return send_success(data=UserResponse.model_validate(current_user)).model_dump()
 

@@ -50,20 +50,17 @@ class Cache:
         if self.cache_type == "redis" and self._redis:
             await self._redis.set(key, val_str, ex=expire)
         elif self.cache_type == "database" and db:
-            async with db.begin():
-                # Delete existing
-                await db.execute(
-                    CacheEntry.__table__.delete().where(CacheEntry.key == key)
-                )
-                # Insert new
-                expires_at = (
-                    datetime.now(timezone.utc) + timedelta(seconds=expire)
-                    if expire
-                    else None
-                )
-                new_entry = CacheEntry(key=key, value=val_str, expires_at=expires_at)
-                db.add(new_entry)
-                await db.commit()
+            # Delete existing
+            await db.execute(CacheEntry.__table__.delete().where(CacheEntry.key == key))
+            # Insert new
+            expires_at = (
+                datetime.now(timezone.utc) + timedelta(seconds=expire)
+                if expire
+                else None
+            )
+            new_entry = CacheEntry(key=key, value=val_str, expires_at=expires_at)
+            db.add(new_entry)
+            await db.commit()
         else:  # inmemory (no expire support, or use threading.Timer if needed)
             self._inmemory[key] = value
 

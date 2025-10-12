@@ -67,27 +67,29 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
     try:
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
-        username: str = payload.get("sub")
-        if username is None:
+        email: str = payload.get("sub")  # <-- 'sub' holds the email
+        if email is None:
             raise credentials_exception
-        token_data = TokenData(username=username)
+        token_data = TokenData(username=email)  # or rename TokenData to TokenEmail
     except InvalidTokenError:
         raise credentials_exception
-    # Replace with actual DB query (example in user.py)
+
     from app.db.models.user import User
     from app.db.session import SessionLocal
 
     async with SessionLocal() as db:
         user = await db.execute(
-            User.__table__.select().where(User.username == token_data.username)
+            User.__table__.select().where(User.email == token_data.username)
         )
         user = user.first()
         if user is None:
             raise credentials_exception
+
     return user
 
 
@@ -122,16 +124,20 @@ def verify_reset_token(token: str, max_age_hours: int = 1) -> str:
         return email
     except:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
-    
+
+
 # account verification code
+
 
 def generate_verification_code() -> str:
     return f"{randint(100000, 999999)}"  # 6-digit code
 
+
 def hash_verification_code(code: str) -> str:
-    return bcrypt.hashpw(code.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    return bcrypt.hashpw(code.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
 
 def verify_verification_code(stored_hash: str, provided_code: str) -> bool:
     if not stored_hash or not provided_code:
         return False
-    return bcrypt.checkpw(provided_code.encode('utf-8'), stored_hash.encode('utf-8'))
+    return bcrypt.checkpw(provided_code.encode("utf-8"), stored_hash.encode("utf-8"))
