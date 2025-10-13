@@ -23,6 +23,7 @@ from jinja2 import TemplateNotFound
 from fastapi_mail.errors import ConnectionErrors
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import FileResponse
 
 # Early fallback logger for startup errors (before settings/Loguru)
 os.makedirs("logs", exist_ok=True)
@@ -236,3 +237,13 @@ async def health_check():
     return send_success(
         message="OK", data={"status": "healthy", "version": settings.PROJECT_VERSION}
     )
+
+
+@app.get("/test-report", response_class=HTMLResponse)
+async def get_test_report(request: Request):
+    report_path = os.path.join("reports", "test_report.html")
+
+    if not os.path.exists(report_path):
+        return {"error": "Test report not found. Run pytest to generate it."}
+
+    return templates.TemplateResponse("reports/test_report.html", {"request": request})

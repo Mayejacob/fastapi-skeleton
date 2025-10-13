@@ -2,7 +2,7 @@ from sqlalchemy import String, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 
 from app.db.base import Base
@@ -19,10 +19,11 @@ class EmailVerificationToken(Base):
         String(512), unique=True, nullable=False, index=True
     )
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+
     expires_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=func.now() + timedelta(hours=24),
+        default=lambda: datetime.now(timezone.utc) + timedelta(hours=24),
     )
     used_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
 
@@ -43,16 +44,18 @@ class PasswordResetToken(Base):
     expires_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=func.now() + timedelta(hours=1),
+        default=lambda: datetime.now(timezone.utc) + timedelta(hours=1),
     )
     used_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True), server_default=func.now()
+        TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     updated_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now()
+        TIMESTAMP(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
     )
-    
+
     # Relationship
     user: Mapped["User"] = relationship("User", back_populates="reset_tokens")
 
