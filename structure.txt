@@ -12,6 +12,13 @@ fastapi-skeleton/
 │   ├── core/
 │   │   ├── __init__.py
 │   │   ├── config.py  # Environment variables
+│   │   ├── exceptions/
+│   │   │   └── handlers.py  # New: All @app.exception_handler defs
+│   │   ├── lifespan.py    # New: asynccontextmanager lifespan
+│   │   ├── logging.py     # New: setup_early_logging and get_logger
+│   │   ├── middlewares.py # New: log_requests middleware
+│   │   ├── openapi.py     # New: custom_openapi function
+│   │   ├── rate_limiting.py # New: setup_rate_limiting function
 │   │   ├── dependencies.py  # Dependency injection
 │   │   ├── responses.py  # Reusable API responses
 │   │   └── security.py  # JWT and auth logic
@@ -40,9 +47,11 @@ fastapi-skeleton/
 │   ├── script.py.mako  # Migration template
 │   └── versions/  # Migration scripts
 ├── templates/
-│   └── email/
-│       ├── base.html
-│       └── welcome.html
+│   |── email/
+│   |    ├── base.html
+│   |    └── welcome.html
+│   ├── Frontend/
+|       └──home.html  
 ├── tests/
 │   ├── __init__.py
 │   ├── conftest.py  # Test fixtures
