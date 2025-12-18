@@ -15,7 +15,7 @@ from app.core.security import (
 )
 from app.db.models.user import User
 from app.db.models.tokens import PasswordResetToken
-from app.services.token import TokenService
+from app.services.token import TokenService, ensure_timezone_aware
 
 
 class AuthService:
@@ -109,7 +109,8 @@ class AuthService:
             )
 
         # Check expiration
-        if user.verification_code_expires_at < datetime.now(timezone.utc):
+        expires_at = ensure_timezone_aware(user.verification_code_expires_at)
+        if expires_at < datetime.now(timezone.utc):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Verification code expired, kindly request a fresh verification code",
@@ -331,7 +332,8 @@ class AuthService:
             )
 
         # Check expiration
-        if reset_token.expires_at < datetime.now(timezone.utc):
+        expires_at = ensure_timezone_aware(reset_token.expires_at)
+        if expires_at < datetime.now(timezone.utc):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Reset code has expired",

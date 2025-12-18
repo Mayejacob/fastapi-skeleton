@@ -141,8 +141,8 @@ class SeederRunner:
 
                 return
 
-        # Seeder not found
+        # Seeder not found - log warning instead of raising
         available_seeders = [s.get_name() for s in self.seeders]
-        raise ValueError(
+        logger.warning(
             f"Seeder '{seeder_name}' not found. Available seeders: {', '.join(available_seeders)}"
         )

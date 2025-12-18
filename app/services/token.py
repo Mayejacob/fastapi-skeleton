@@ -14,6 +14,24 @@ from app.db.models.tokens import AccessToken, RefreshToken
 from app.db.models.user import User
 
 
+def ensure_timezone_aware(dt: datetime) -> datetime:
+    """
+    Ensure a datetime object is timezone-aware.
+    If it's naive, assume it's UTC.
+
+    Args:
+        dt: datetime object
+
+    Returns:
+        Timezone-aware datetime
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 class TokenService:
     """Service for managing JWT tokens with database storage"""
 
@@ -199,7 +217,8 @@ class TokenService:
                 )
 
             # Check expiration (belt and suspenders with JWT exp check)
-            if token_record.expires_at < datetime.now(timezone.utc):
+            expires_at = ensure_timezone_aware(token_record.expires_at)
+            if expires_at < datetime.now(timezone.utc):
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Token has expired",

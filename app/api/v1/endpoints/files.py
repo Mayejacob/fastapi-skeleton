@@ -1,7 +1,7 @@
 from typing import Annotated, Optional
 import uuid
 
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import DBDependency
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/files", tags=["files"])
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    purpose: Optional[str] = None,
+    purpose: Optional[str] = Form(None),
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: DBDependency = None,
 ):
@@ -28,6 +28,27 @@ async def upload_file(
     - **file**: The file to upload
     - **purpose**: Optional purpose tag (e.g., "avatar", "document")
     """
+    # Check file size by reading entire file content
+    max_size_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+
+    # Read file to check size (this is the safest way for test/prod consistency)
+    file_content = await file.read()
+
+    if len(file_content) > max_size_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File too large. Maximum size: {settings.MAX_UPLOAD_SIZE_MB}MB",
+        )
+
+    # Create a new SpooledTemporaryFile from the content
+    from io import BytesIO
+    # Close the old file handle to prevent resource warning
+    old_file = file.file
+    file.file = BytesIO(file_content)
+    if hasattr(old_file, 'close'):
+        old_file.close()
+    await file.seek(0)
+
     file_service = FileService(db)
 
     # Parse allowed types from settings

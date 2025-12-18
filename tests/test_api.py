@@ -14,16 +14,16 @@ if sys.platform.startswith("win"):
 
 
 # ✅ Safe run_async helper
-# def run_async(coro):
-#     try:
-#         loop = asyncio.get_event_loop()
-#         if loop.is_running():
-#             return asyncio.ensure_future(coro)
-#         return loop.run_until_complete(coro)
-#     except RuntimeError:
-#         loop = asyncio.new_event_loop()
-#         asyncio.set_event_loop(loop)
-#         return loop.run_until_complete(coro)
+def run_async(coro):
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            return asyncio.ensure_future(coro)
+        return loop.run_until_complete(coro)
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(coro)
 
 
 async def test_register_user(client):
@@ -46,6 +46,11 @@ async def test_duplicate_email_or_username(client):
         "email": "test@example.com",
         "password": "Password123!",
     }
+    # First registration should succeed
+    response1 = await client.post("/api/v1/auth/register", json=payload)
+    assert response1.status_code == 200
+
+    # Second registration with same email should fail
     response = await client.post("/api/v1/auth/register", json=payload)
     assert response.status_code == 400
     error_data = response.json()
@@ -55,30 +60,31 @@ async def test_duplicate_email_or_username(client):
 
 
 @pytest.mark.asyncio
-async def test_verification_and_login_flow(client):
-    from app.core.dependencies import get_db
+async def test_verification_and_login_flow(client, db_session):
+    # Register a new user
+    payload = {
+        "username": "logintest",
+        "email": "logintest@example.com",
+        "password": "Password123!",
+    }
+    register_resp = await client.post("/api/v1/auth/register", json=payload)
+    assert register_resp.status_code == 200
 
-    async for db in get_db():
-        result = await db.execute(select(User))
-        user = result.scalars().first()
-        break
-
-    assert user is not None
-
-    user.verification_code = hash_verification_code("654321")
-    user.is_verified = True
-    user.verification_code_expires_at = (
-        datetime.now(timezone.utc) + timedelta(minutes=10)
+    # Get the user from database and verify them
+    result = await db_session.execute(
+        select(User).where(User.email == payload["email"])
     )
+    user = result.scalar_one()
 
-    async for db in get_db():
-        db.add(user)
-        await db.commit()
-        break
+    # Manually verify the user
+    user.is_active = True
+    user.email_verified_at = datetime.now(timezone.utc)
+    await db_session.commit()
 
+    # Now login should work
     login_resp = await client.post(
         "/api/v1/auth/login",
-        json={"email": user.email, "password": "Password123!"},
+        json={"email": payload["email"], "password": payload["password"]},
     )
 
     assert login_resp.status_code == 200
@@ -89,40 +95,49 @@ async def test_resend_verification_code(client):
     assert response.status_code in [200, 400]
 
 
-async def test_forgot_and_reset_password(client):
-    from app.core.dependencies import get_db
-    import asyncio
+async def test_forgot_and_reset_password(client, db_session):
+    # First, register and verify a user
+    payload = {
+        "username": "resettest",
+        "email": "resettest@example.com",
+        "password": "Password123!",
+    }
+    register_resp = await client.post("/api/v1/auth/register", json=payload)
+    assert register_resp.status_code == 200
 
-    # Forgot password
-    payload = {"email": "test@example.com"}
-    resp = await client.post("/api/v1/auth/forgot-password", json=payload)
+    # Verify user
+    result = await db_session.execute(
+        select(User).where(User.email == payload["email"])
+    )
+    user = result.scalar_one()
+    user.is_active = True
+    user.email_verified_at = datetime.now(timezone.utc)
+    await db_session.commit()
+
+    # Request password reset
+    resp = await client.post(
+        "/api/v1/auth/forgot-password",
+        json={"email": payload["email"]}
+    )
     assert resp.status_code == 200
     assert "Password reset email" in resp.json()["message"]
 
-    # Retrieve token
-    async def get_token():
-        async for db in get_db():
-            result = await db.execute(select(PasswordResetToken))
-            return result.scalars().first()
+    # Get the reset token from database
+    token_result = await db_session.execute(
+        select(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
+    )
+    token = token_result.scalar_one()
 
-    token = run_async(get_token())
-    assert token is not None
-
+    # Update token with known code
     correct_code = "999999"
     token.token = hash_verification_code(correct_code)
+    await db_session.commit()
 
-    async def update_token():
-        async for db in get_db():
-            db.add(token)
-            await db.commit()
-
-    run_async(update_token())
-
-    # Correct reset
+    # Reset password
     correct_reset = await client.post(
         "/api/v1/auth/reset-password",
         json={
-            "email": "test@example.com",
+            "email": payload["email"],
             "verification_code": correct_code,
             "new_password": "Newpass123!",
         },
@@ -130,15 +145,34 @@ async def test_forgot_and_reset_password(client):
     assert correct_reset.status_code == 200
 
 
-async def test_me_endpoint(client):
+async def test_me_endpoint(client, db_session):
+    # Register and verify a user
+    payload = {
+        "username": "metest",
+        "email": "metest@example.com",
+        "password": "Password123!",
+    }
+    register_resp = await client.post("/api/v1/auth/register", json=payload)
+    assert register_resp.status_code == 200
+
+    # Verify user
+    result = await db_session.execute(
+        select(User).where(User.email == payload["email"])
+    )
+    user = result.scalar_one()
+    user.is_active = True
+    user.email_verified_at = datetime.now(timezone.utc)
+    await db_session.commit()
+
+    # Login
     login_resp = await client.post(
         "/api/v1/auth/login",
-        json={"email": "test@example.com", "password": "Newpass123!"},
+        json={"email": payload["email"], "password": payload["password"]},
     )
 
     data = login_resp.json()
-    print("LOGIN RESPONSE:", data)
     assert login_resp.status_code == 200, data
+    assert "access_token" in data["data"]
 
 
 async def test_cache(client):

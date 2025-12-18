@@ -95,6 +95,14 @@ class FileService:
         # Validate file
         self._validate_file(file, allowed_types, max_size_mb)
 
+        # Check file size if available (some clients provide this upfront)
+        if hasattr(file, 'size') and file.size is not None:
+            if file.size > self.max_size_bytes:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"File too large. Maximum size: {max_size_mb}MB",
+                )
+
         # Generate secure filename
         secure_filename, extension = self._generate_secure_filename(file.filename)
 

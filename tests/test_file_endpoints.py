@@ -101,9 +101,9 @@ class TestFileUpload:
         self, client: AsyncClient, auth_token: str, tmp_path
     ):
         """Test upload with file exceeding size limit"""
-        # Create file larger than 5MB (test limit)
+        # Create file larger than 10MB (default limit)
         large_file = tmp_path / "large.jpg"
-        large_file.write_bytes(b"\x00" * (6 * 1024 * 1024))  # 6MB
+        large_file.write_bytes(b"\x00" * (11 * 1024 * 1024))  # 11MB
 
         with open(large_file, "rb") as f:
             files = {"file": ("large.jpg", f, "image/jpeg")}
