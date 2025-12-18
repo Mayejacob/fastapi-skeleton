@@ -60,6 +60,82 @@ class PasswordResetToken(Base):
     user: Mapped["User"] = relationship("User", back_populates="reset_tokens")
 
 
+class AccessToken(Base):
+    __tablename__ = "access_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
+    token_hash: Mapped[str] = mapped_column(
+        String(512), unique=True, nullable=False, index=True
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )
+    revoked: Mapped[bool] = mapped_column(default=False, nullable=False)
+    revoked_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
+
+    # Device/IP metadata
+    ip_address: Mapped[str] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[str] = mapped_column(String(512), nullable=True)
+    device_name: Mapped[str] = mapped_column(String(255), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    # Relationship
+    user: Mapped["User"] = relationship("User", back_populates="access_tokens")
+
+
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
+    token_hash: Mapped[str] = mapped_column(
+        String(512), unique=True, nullable=False, index=True
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )
+    revoked: Mapped[bool] = mapped_column(default=False, nullable=False)
+    revoked_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
+
+    # Link to access token
+    access_token_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("access_tokens.id"), nullable=True
+    )
+
+    # Metadata
+    ip_address: Mapped[str] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[str] = mapped_column(String(512), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    # Relationship
+    user: Mapped["User"] = relationship("User", back_populates="refresh_tokens")
+
+
 # Backrefs in User (add to user.py after class)
 User.verification_tokens = relationship("EmailVerificationToken", back_populates="user")
 User.reset_tokens = relationship("PasswordResetToken", back_populates="user")
+User.access_tokens = relationship(
+    "AccessToken", back_populates="user", cascade="all, delete-orphan"
+)
+User.refresh_tokens = relationship(
+    "RefreshToken", back_populates="user", cascade="all, delete-orphan"
+)

@@ -34,6 +34,20 @@ A modular, secure, and scalable FastAPI project template.
 
 Run tests: `pytest`
 
+**Quick Start:**
+```bash
+# 1. Run migration
+alembic upgrade head
+
+# 2. Seed database
+python seed.py
+
+# 3. Start app
+uvicorn main:app --reload
+
+# 4. Visit http://localhost:8000/docs
+```
+
 ## Setup
 
 ### Prerequisites

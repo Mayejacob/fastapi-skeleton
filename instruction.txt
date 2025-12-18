@@ -1,0 +1,87 @@
+You are a senior backend engineer.
+
+Your task is to REFRACTOR and IMPROVE this FastAPI repository into a CLEAN, REUSABLE, PRODUCTION-READY SKELETON that can be used as the base for any future project.
+
+Repository:
+- Use the current codebase as input
+- Preserve working logic, but REMOVE product-specific complexity
+
+GOALS:
+1. Make the project a true FastAPI skeleton (not a finished product)
+2. Follow senior-level architecture and clean code principles
+3. Keep things boring, explicit, predictable, and extensible
+
+--------------------
+ARCHITECTURE REQUIREMENTS
+--------------------
+
+1. PROJECT STRUCTURE
+- Reorganize folders into clear layers:
+  - api (routing & request/response only)
+  - core (config, security, logging, lifecycle, middlewares)
+  - db (models, schemas, session, migrations)
+  - services (business logic)
+  - utils (shared helpers)
+- Remove duplicated or overlapping modules
+- Rename files where needed for clarity
+- Keep structure minimal but future-proof
+
+2. GENERIC SEEDER SYSTEM (MANDATORY)
+- Create a BaseSeeder class:
+  - Supports execution order
+  - Can be extended for any model
+- Create a seeder runner that:
+  - Auto-discovers seeders
+  - Runs them deterministically
+- Seeders must be environment-aware (dev/test/prod safe)
+- Replace existing ad-hoc seed scripts with this system
+
+3. JWT & AUTH IMPROVEMENTS (MANDATORY)
+- Store JWT tokens in the database (hashed)
+- Token model must support:
+  - user_id
+  - expiration
+  - revocation
+  - device / ip metadata
+- Auth middleware must validate:
+  - JWT signature
+  - expiry
+  - token existence in DB
+  - revoked status
+- Keep JWT payload minimal
+- Implement clean logout & token revocation flow
+
+4. SERVICES LAYER
+- Move business logic out of API routes
+- Services should be framework-agnostic
+- API layer should only orchestrate requests
+
+
+6. QUALITY & MAINTAINABILITY
+- Add clear docstrings
+- Keep naming consistent
+- Follow SOLID principles
+- Avoid over-engineering
+- Prefer clarity over cleverness
+- The system uses uuid not id for each model
+-  create services for easy upload and delete of files
+
+--------------------
+OUTPUT REQUIREMENTS
+--------------------
+
+1. Update the project structure accordingly
+2. Modify existing code instead of rewriting unnecessarily
+3. Add missing core components where required
+4. Ensure the project runs after refactor
+5. Produce:
+   - Updated folder structure
+   - Updated seed system
+   - Updated JWT/token handling
+   - Cleaner separation of concerns
+
+
+DO NOT:
+- Add unnecessary abstractions
+- Change the framework
+

@@ -3,4 +3,10 @@ from .models.user import User  # Registers User table
 from .models.cache import (
     CacheEntry,
 )  # Registers CacheEntry table (if CACHE_TYPE=database)
-from .models.tokens import EmailVerificationToken, PasswordResetToken
+from .models.tokens import (
+    EmailVerificationToken,
+    PasswordResetToken,
+    AccessToken,
+    RefreshToken,
+)
+from .models.file import UploadedFile

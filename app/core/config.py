@@ -26,6 +26,16 @@ class Settings(BaseSettings):
     SECRET_KEY: str = ""  # Required; validate below
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    # Environment & Token Settings
+    ENVIRONMENT: str = "development"  # development, test, staging, production
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+
+    # File Upload Settings
+    UPLOAD_DIR: str = "uploads"
+    MAX_UPLOAD_SIZE_MB: int = 10
+    ALLOWED_UPLOAD_TYPES: str = "image/jpeg,image/png,image/gif,image/webp,application/pdf"
+
     EMAIL_HOST: str
     EMAIL_PORT: int
     EMAIL_USERNAME: str

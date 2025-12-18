@@ -15,6 +15,7 @@ from random import randint
 from itsdangerous import URLSafeTimedSerializer
 
 from app.core.config import settings
+from app.core.dependencies import get_db
 
 # pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
@@ -61,36 +62,55 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     return encoded_jwt
 
 
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+async def get_current_user(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    db: Annotated["AsyncSession", Depends(get_db)],
+):
+    """
+    Get current user from JWT token with database validation
+
+    Validates JWT signature and checks database for token revocation
+    """
+    from app.services.token import TokenService
+    from app.services.user import UserService
+
+    token_service = TokenService()
 
     try:
-        payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        # Validate token signature and check database
+        payload, token_record = await token_service.validate_token(token, db)
+
+        # Get user by email from payload
+        user_service = UserService(db)
+        email = payload.get("sub")
+
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        user = await user_service.get_by_email(email)
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        return user
+
+    except HTTPException:
+        # Re-raise HTTP exceptions from token service
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Could not validate credentials: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-        email: str = payload.get("sub")  # <-- 'sub' holds the email
-        if email is None:
-            raise credentials_exception
-        token_data = TokenData(username=email)  # or rename TokenData to TokenEmail
-    except InvalidTokenError:
-        raise credentials_exception
-
-    from app.db.models.user import User
-    from app.db.session import SessionLocal
-
-    async with SessionLocal() as db:
-        user = await db.execute(
-            User.__table__.select().where(User.email == token_data.username)
-        )
-        user = user.first()
-        if user is None:
-            raise credentials_exception
-
-    return user
 
 
 # For email/reset tokens (signed, timed)
