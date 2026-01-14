@@ -1,3 +1,4 @@
+import select
 from typing import Any, Optional
 import json
 import redis.asyncio as aioredis
@@ -24,17 +25,22 @@ class Cache:
             if value:
                 return json.loads(value) if value else None
         elif self.cache_type == "database" and db:
-            entry = await db.execute(
-                CacheEntry.__table__.select().where(CacheEntry.key == key)
+            # use ORM select to get a real cacheEntryu instanjce
+            result = await db.execute(
+                select(CacheEntry).where(CacheEntry.key == key)
             )
-            entry = entry.first()
-            if entry and (
-                not entry.expires_at or entry.expires_at > datetime.now(timezone.utc)
-            ):
-                return json.loads(entry.value)
-            elif entry:  # Expired
-                await db.delete(entry)
-                await db.commit()
+            entry: Optional[CacheEntry] = result.scalars().first()
+
+            if entry:
+                # check if expired
+                if entry.expires_at and entry.expires_at <= datetime.now(timezone.utc):
+                    await db.delete(entry)
+                    await db.commit()
+                    return None
+                else:
+                    return json.loads(entry.value)
+            return None
+        
         else:  # inmemory
             return self._inmemory.get(key)
         return None
@@ -64,6 +70,18 @@ class Cache:
         else:  # inmemory (no expire support, or use threading.Timer if needed)
             self._inmemory[key] = value
 
+    async def delete(self, key: str, db: Optional[DBDependency] = None):
+        if self.cache_type == "redis" and self._redis:
+            await self._redis.delete(key)
+
+        elif self.cache_type == "database" and db:
+            await db.execute(
+                CacheEntry.__table__.delete().where(CacheEntry.key == key)
+            )
+            await db.commit()
+        else:  # inmemory
+            self._inmemory.pop(key, None)
+            
     async def close(self):
         if self._redis:
             await self._redis.close()
