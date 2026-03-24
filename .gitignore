@@ -7,3 +7,4 @@ logs/
 *.log
 # migrations/versions/*
 *.sqlite
+/.venv
