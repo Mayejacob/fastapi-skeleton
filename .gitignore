@@ -8,3 +8,8 @@ logs/
 # migrations/versions/*
 *.sqlite
 /.venv
+
+# Python package metadata
+*.egg-info/
+*.egg
+*.egg-info/*
