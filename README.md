@@ -61,6 +61,25 @@ A modular, secure, and scalable FastAPI project template — ready for developme
 
 Choose your preferred package manager:
 
+### Get started fast (if not starting from scratch)
+
+If you've already cloned the repo and just want to jump into a working environment quickly, use the following `uv`-based flow.
+
+```bash
+# 1. Create virtual environment with uv
+uv venv
+
+# 2. Activate it
+source .venv/bin/activate  # macOS/Linux
+# On Windows: .venv\Scripts\activate
+
+# 3. Install all dependencies from pyproject.toml
+uv pip install -e .
+
+# That's it! No need for requirements.txt
+```
+
+
 ### Using pip (traditional)
 
 1. Clone the repo
@@ -487,12 +506,12 @@ uv run uvicorn main:app --host 0.0.0.0 --port $PORT
 
 ## Live demo
 
-https://fastapi-skeleton-nsr7.onrender.com
+Live demo: https://fastapi-skeleton-nsr7.onrender.com
 
 ## Author
 
 Jacob Olorunmaye
 
-GitHub: Mayejacob
+GitHub: https://github.com/Mayejacob
 
-Website: mayeconcept.com.ng
+Website: https://mayeconcept.com.ng
