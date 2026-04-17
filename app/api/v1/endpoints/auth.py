@@ -14,6 +14,7 @@ from app.db.schemas.user import (
     LoginRequest,
     VerifyRequest,
     ForgotPasswordRequest,
+    ResendVerificationRequest,
     ResetRequest,
 )
 from app.services.email import send_email
@@ -73,7 +74,7 @@ async def verify_account(request: VerifyRequest, db: DBDependency):
 
 
 @router.post("/resend_verification_code")
-async def resend_verification_code(form_data: ForgotPasswordRequest, db: DBDependency):
+async def resend_verification_code(form_data: ResendVerificationRequest, db: DBDependency):
     """Resend verification code to user"""
     auth_service = AuthService(db)
 
@@ -181,7 +182,7 @@ async def reset_password(request: ResetRequest, db: DBDependency):
     # Commit the changes
     await db.commit()
 
-    return send_success(message="Password reset successfully.").model_dump()
+    return send_success(message="Password reset successfully.")
 
 
 @router.post("/logout")
@@ -225,7 +226,7 @@ async def logout_all_devices(
 @router.get("/me")
 async def read_users_me(current_user: Annotated[User, Depends(get_current_user)]):
     """Get current authenticated user"""
-    return send_success(data=UserResponse.model_validate(current_user)).model_dump()
+    return send_success(data=UserResponse.model_validate(current_user))
 
 
 @router.get("/test-cache")
@@ -242,4 +243,4 @@ async def test_cache(db: DBDependency):
         await cache.set(key, value, expire=60, db=db)  # 60s expiry
         cached = value
 
-    return send_success(data=cached, message="Cache test successful.").model_dump()
+    return send_success(data=cached, message="Cache test successful.")

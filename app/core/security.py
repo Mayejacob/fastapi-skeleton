@@ -12,7 +12,7 @@ from pydantic import BaseModel
 import hashlib  # Added for SHA-256
 from random import randint
 
-from itsdangerous import URLSafeTimedSerializer
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from app.core.config import settings
 from app.core.dependencies import get_db
@@ -126,7 +126,7 @@ def verify_verification_token(token: str, max_age_hours: int = 24) -> str:
             token, salt="email-verify", max_age_seconds=max_age_hours * 3600
         )
         return email
-    except:
+    except (SignatureExpired, BadSignature):
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
 
@@ -142,7 +142,7 @@ def verify_reset_token(token: str, max_age_hours: int = 1) -> str:
             token, salt="password-reset", max_age_seconds=max_age_hours * 3600
         )
         return email
-    except:
+    except (SignatureExpired, BadSignature):
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
 

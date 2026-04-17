@@ -1,4 +1,4 @@
-"""add_access_refresh_tokens_and_uploaded_files
+"""add_access_refresh_tokens_and_cache_entries
 
 Revision ID: 118bd5c5d201
 Revises: 7fb72c5bfa70
@@ -82,21 +82,6 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_password_reset_tokens_token'), 'password_reset_tokens', ['token'], unique=True)
-    op.create_table('uploaded_files',
-    sa.Column('id', sa.UUID(), nullable=False),
-    sa.Column('user_id', sa.UUID(), nullable=True),
-    sa.Column('filename', sa.String(length=255), nullable=False),
-    sa.Column('original_filename', sa.String(length=255), nullable=False),
-    sa.Column('file_path', sa.String(length=512), nullable=False),
-    sa.Column('file_size', sa.Integer(), nullable=False),
-    sa.Column('mime_type', sa.String(length=127), nullable=True),
-    sa.Column('purpose', sa.String(length=50), nullable=True),
-    sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), nullable=False),
-    sa.Column('deleted_at', postgresql.TIMESTAMP(timezone=True), nullable=True),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_uploaded_files_user_id'), 'uploaded_files', ['user_id'], unique=False)
     op.create_table('refresh_tokens',
     sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('user_id', sa.UUID(), nullable=False),
@@ -122,8 +107,6 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_refresh_tokens_user_id'), table_name='refresh_tokens')
     op.drop_index(op.f('ix_refresh_tokens_token_hash'), table_name='refresh_tokens')
     op.drop_table('refresh_tokens')
-    op.drop_index(op.f('ix_uploaded_files_user_id'), table_name='uploaded_files')
-    op.drop_table('uploaded_files')
     op.drop_index(op.f('ix_password_reset_tokens_token'), table_name='password_reset_tokens')
     op.drop_table('password_reset_tokens')
     op.drop_index(op.f('ix_email_verification_tokens_token'), table_name='email_verification_tokens')

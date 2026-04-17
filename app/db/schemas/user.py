@@ -39,12 +39,6 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
-# New: Verify/Reset
-class VerifyRequest(BaseModel):
-    email: EmailStr
-    code: str
-
-
 class ResetRequest(BaseModel):
     email: EmailStr
     verification_code: str
@@ -52,6 +46,10 @@ class ResetRequest(BaseModel):
 
 
 class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResendVerificationRequest(BaseModel):
     email: EmailStr
 
 

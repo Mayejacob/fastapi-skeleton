@@ -162,49 +162,6 @@ class TestNotFoundErrors:
         data = response.json()
         assert data["success"] is False
 
-    @pytest.mark.asyncio
-    async def test_nonexistent_file(self, client: AsyncClient, auth_token: str):
-        """Test accessing non-existent file"""
-        fake_id = "00000000-0000-0000-0000-000000000000"
-        response = await client.get(
-            f"/api/v1/files/{fake_id}",
-            headers={"Authorization": f"Bearer {auth_token}"},
-        )
-
-        assert response.status_code == 404
-        data = response.json()
-        assert data["success"] is False
-        assert data["status_code"] == 404
-
-
-class TestForbiddenErrors:
-    """Test 403 forbidden error handling"""
-
-    @pytest.mark.asyncio
-    async def test_access_other_user_file(
-        self, client: AsyncClient, auth_token: str, admin_token: str, sample_image_file
-    ):
-        """Test accessing another user's file"""
-        # User 1 uploads file
-        with open(sample_image_file, "rb") as f:
-            files = {"file": ("test.jpg", f, "image/jpeg")}
-            upload_response = await client.post(
-                "/api/v1/files/upload",
-                files=files,
-                headers={"Authorization": f"Bearer {auth_token}"},
-            )
-        file_id = upload_response.json()["data"]["id"]
-
-        # User 2 tries to access
-        response = await client.get(
-            f"/api/v1/files/{file_id}",
-            headers={"Authorization": f"Bearer {admin_token}"},
-        )
-
-        assert response.status_code == 403
-        data = response.json()
-        assert data["success"] is False
-        assert data["status_code"] == 403
 
 
 class TestBadRequestErrors:
@@ -228,27 +185,6 @@ class TestBadRequestErrors:
         assert data["status_code"] == 400
         assert "already" in data["message"].lower()
 
-    @pytest.mark.asyncio
-    async def test_invalid_file_type(
-        self, client: AsyncClient, auth_token: str, tmp_path
-    ):
-        """Test uploading invalid file type"""
-        # Create invalid file
-        exe_file = tmp_path / "malware.exe"
-        exe_file.write_bytes(b"MZ\x90\x00")
-
-        with open(exe_file, "rb") as f:
-            files = {"file": ("malware.exe", f, "application/x-msdownload")}
-            response = await client.post(
-                "/api/v1/files/upload",
-                files=files,
-                headers={"Authorization": f"Bearer {auth_token}"},
-            )
-
-        assert response.status_code == 400
-        data = response.json()
-        assert data["success"] is False
-        assert data["status_code"] == 400
 
 
 class TestResponseFormat:
@@ -340,38 +276,6 @@ class TestHTTPStatusCodes:
         """Test 401 status code on unauthorized"""
         response = await client.get("/api/v1/auth/me")
         assert response.status_code == 401
-
-    @pytest.mark.asyncio
-    async def test_403_on_forbidden(
-        self, client: AsyncClient, auth_token: str, admin_token: str, sample_image_file
-    ):
-        """Test 403 status code on forbidden"""
-        # Upload as user 1
-        with open(sample_image_file, "rb") as f:
-            files = {"file": ("test.jpg", f, "image/jpeg")}
-            upload_response = await client.post(
-                "/api/v1/files/upload",
-                files=files,
-                headers={"Authorization": f"Bearer {auth_token}"},
-            )
-        file_id = upload_response.json()["data"]["id"]
-
-        # Try to delete as user 2
-        response = await client.delete(
-            f"/api/v1/files/{file_id}",
-            headers={"Authorization": f"Bearer {admin_token}"},
-        )
-        assert response.status_code == 403
-
-    @pytest.mark.asyncio
-    async def test_404_on_not_found(self, client: AsyncClient, auth_token: str):
-        """Test 404 status code on not found"""
-        fake_id = "00000000-0000-0000-0000-000000000000"
-        response = await client.get(
-            f"/api/v1/files/{fake_id}",
-            headers={"Authorization": f"Bearer {auth_token}"},
-        )
-        assert response.status_code == 404
 
     @pytest.mark.asyncio
     async def test_422_on_validation_error(self, client: AsyncClient):

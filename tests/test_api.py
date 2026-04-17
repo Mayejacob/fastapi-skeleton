@@ -1,8 +1,7 @@
 import pytest
-from app.core.security import verify_password
+from app.core.security import hash_verification_code, verify_password
 from app.db.models.user import User
 from sqlalchemy import select
-from app.core.security import hash_verification_code, verify_password
 from datetime import datetime, timedelta, timezone
 
 from app.db.models.tokens import PasswordResetToken

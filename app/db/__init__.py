@@ -9,4 +9,3 @@ from .models.tokens import (
     AccessToken,
     RefreshToken,
 )
-from .models.file import UploadedFile

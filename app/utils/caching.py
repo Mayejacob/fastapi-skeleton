@@ -1,4 +1,4 @@
-import select
+from sqlalchemy import select
 from typing import Any, Optional
 import json
 import redis.asyncio as aioredis
@@ -25,7 +25,7 @@ class Cache:
             if value:
                 return json.loads(value) if value else None
         elif self.cache_type == "database" and db:
-            # use ORM select to get a real cacheEntryu instanjce
+            # use ORM select to get a real CacheEntry instance
             result = await db.execute(
                 select(CacheEntry).where(CacheEntry.key == key)
             )
@@ -43,7 +43,6 @@ class Cache:
         
         else:  # inmemory
             return self._inmemory.get(key)
-        return None
 
     async def set(
         self,
