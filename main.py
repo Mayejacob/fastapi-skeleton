@@ -1,19 +1,19 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.v1.router import router as v1_router
 from app.core.config import settings
 from app.core.exceptions.handlers import register_exception_handlers
 from app.core.lifespan import lifespan
 from app.core.logging import setup_early_logging
-from app.core.middlewares import LogRequestsMiddleware  # Updated import
+from app.core.middlewares import LogRequestsMiddleware
 from app.core.openapi import custom_openapi
 from app.core.rate_limiting import setup_rate_limiting
-from fastapi.responses import HTMLResponse, JSONResponse
 
-# Setup early logging for startup errors
 setup_early_logging()
 
 app = FastAPI(
@@ -27,13 +27,22 @@ app = FastAPI(
     ],
 )
 
-# Customize OpenAPI schema
-app.openapi = lambda: custom_openapi(app)  # Updated to lambda for app access
+app.openapi = lambda: custom_openapi(app)
 
-# Setup rate limiting if enabled
+# Rate limiting (limiter attached to app.state; enabled flag controls enforcement)
 setup_rate_limiting(app)
 
-# Add CORS middleware
+# Compress responses larger than 1 KB
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Reject requests with unexpected Host headers (production hardening)
+# Set ALLOWED_HOSTS in .env to restrict (e.g. "yourdomain.com,www.yourdomain.com")
+if settings.ALLOWED_HOSTS != "*":
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=settings.allowed_hosts_list,
+    )
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,
@@ -42,17 +51,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add logging middleware
-app.add_middleware(LogRequestsMiddleware)  # Updated to class
+app.add_middleware(LogRequestsMiddleware)
 
-# Register all exception handlers
 register_exception_handlers(app)
 
-# Include API routers
 app.include_router(v1_router)
-
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 
 templates = Jinja2Templates(directory="templates")
 
@@ -68,9 +71,23 @@ async def root(request: Request):
 @app.get("/health")
 async def health_check():
     from app.core.responses import send_success
+    from app.db.session import engine
+    from sqlalchemy import text
+
+    db_status = "healthy"
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+    except Exception:
+        db_status = "unhealthy"
 
     return send_success(
-        message="OK", data={"status": "healthy", "version": settings.PROJECT_VERSION}
+        message="OK",
+        data={
+            "status": "healthy" if db_status == "healthy" else "degraded",
+            "version": settings.PROJECT_VERSION,
+            "database": db_status,
+        },
     )
 
 

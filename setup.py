@@ -86,7 +86,14 @@ def main() -> None:
     cache_type = prompt_choice("Cache type", ["inmemory", "redis", "database"], "inmemory")
     redis_url = "redis://localhost:6379/0"
     if cache_type == "redis":
-        redis_url = prompt("  Redis URL", "redis://localhost:6379/0")
+        redis_host = prompt("  Redis host", "localhost")
+        redis_port = prompt("  Redis port", "6379")
+        redis_password = input("  Redis password (leave blank if none): ").strip()
+        redis_db = prompt("  Redis database index", "0")
+        if redis_password:
+            redis_url = f"redis://:{redis_password}@{redis_host}:{redis_port}/{redis_db}"
+        else:
+            redis_url = f"redis://{redis_host}:{redis_port}/{redis_db}"
 
     # ── Rate Limiting ────────────────────────────────────────────────────────
     rate_limit_enabled = "false"
@@ -102,14 +109,18 @@ def main() -> None:
     access_token_expire = prompt("Access token expiry (minutes)", "30")
     refresh_token_expire = prompt("Refresh token expiry (days)", "30")
 
-    # ── CORS ─────────────────────────────────────────────────────────────────
-    print("\n--- CORS ---")
+    # ── CORS & Trusted Hosts ─────────────────────────────────────────────────
+    print("\n--- CORS & Trusted Hosts ---")
     if environment == "production":
         allowed_origins = prompt(
             "Allowed origins (comma-separated)", "https://yourdomain.com"
         )
+        allowed_hosts = prompt(
+            "Allowed hosts (comma-separated)", "yourdomain.com,www.yourdomain.com"
+        )
     else:
         allowed_origins = prompt("Allowed origins", "*")
+        allowed_hosts = "*"
 
     # ── Email ────────────────────────────────────────────────────────────────
     print("\n--- Email ---")
@@ -128,6 +139,7 @@ APP_URL={app_url}
 PROJECT_VERSION=1.0.0
 DEBUG={debug}
 ALLOWED_ORIGINS={allowed_origins}
+ALLOWED_HOSTS={allowed_hosts}
 ENVIRONMENT={environment}
 
 # Database

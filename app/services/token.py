@@ -286,6 +286,70 @@ class TokenService:
 
         return count
 
+    async def validate_refresh_token(
+        self, refresh_token: str, db: AsyncSession
+    ) -> Tuple[dict, RefreshToken]:
+        """
+        Validate a refresh token and return its payload and DB record.
+
+        Raises:
+            HTTPException: If the token is invalid, revoked, expired, or wrong type.
+        """
+        try:
+            payload = jwt.decode(
+                refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+            )
+
+            if payload.get("type") != "refresh":
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid token type",
+                )
+
+            token_id = payload.get("jti")
+            if not token_id:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid token",
+                )
+
+            token_hash = self._hash_token(refresh_token)
+
+            result = await db.execute(
+                select(RefreshToken).where(
+                    RefreshToken.id == uuid.UUID(token_id),
+                    RefreshToken.token_hash == token_hash,
+                )
+            )
+            token_record = result.scalar_one_or_none()
+
+            if not token_record:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid refresh token",
+                )
+
+            if token_record.revoked:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Refresh token has been revoked",
+                )
+
+            expires_at = ensure_timezone_aware(token_record.expires_at)
+            if expires_at < datetime.now(timezone.utc):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Refresh token has expired",
+                )
+
+            return payload, token_record
+
+        except InvalidTokenError as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Invalid token: {str(e)}",
+            )
+
     async def cleanup_expired_tokens(self, db: AsyncSession) -> int:
         """
         Delete expired tokens from database (scheduled cleanup task)

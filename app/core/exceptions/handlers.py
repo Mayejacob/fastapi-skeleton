@@ -19,11 +19,12 @@ def register_exception_handlers(app):
             f"Traceback: {traceback.format_exc()}\n"
             f"User-Agent: {request.headers.get('user-agent')}"
         )
+        from app.core.config import settings
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=send_error(
                 message="An unexpected error occurred.",
-                data={"detail": str(exc)},
+                data={"detail": str(exc)} if settings.DEBUG else None,
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             ).model_dump(),
         )
@@ -120,11 +121,12 @@ def register_exception_handlers(app):
             f"Mail connection error for {request.method} {request.url}: {str(exc)}\n"
             f"Traceback: {traceback.format_exc()}"
         )
+        from app.core.config import settings
         return JSONResponse(
             status_code=status.HTTP_502_BAD_GATEWAY,
             content=send_error(
                 message="Email service unavailable.",
-                data={"detail": str(exc)},
+                data={"detail": str(exc)} if settings.DEBUG else None,
                 status_code=status.HTTP_502_BAD_GATEWAY,
             ).model_dump(),
         )

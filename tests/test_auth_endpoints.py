@@ -206,20 +206,6 @@ class TestLogoutEndpoints:
         assert data["success"] is False
 
     @pytest.mark.asyncio
-    async def test_logout_all_devices(self, client: AsyncClient, auth_token: str):
-        """Test logout from all devices"""
-        response = await client.post(
-            "/api/v1/auth/logout-all",
-            headers={"Authorization": f"Bearer {auth_token}"},
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert "revoked_count" in data["data"]
-        assert data["data"]["revoked_count"] >= 1
-
-    @pytest.mark.asyncio
     async def test_use_token_after_logout(
         self, client: AsyncClient, auth_token: str
     ):

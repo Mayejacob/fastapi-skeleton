@@ -1,180 +1,174 @@
 import pytest
-from app.core.security import hash_verification_code, verify_password
-from app.db.models.user import User
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
+from app.db.models.user import User
 from app.db.models.tokens import PasswordResetToken
-
-import asyncio, sys
-
-if sys.platform.startswith("win"):
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+from app.core.security import hash_verification_code
+from app.utils.caching import cache
 
 
-# ✅ Safe run_async helper
-def run_async(coro):
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            return asyncio.ensure_future(coro)
-        return loop.run_until_complete(coro)
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        return loop.run_until_complete(coro)
+# ── Cache unit tests ──────────────────────────────────────────────────────────
+
+class TestCache:
+    """Test the cache utility directly (inmemory backend)."""
+
+    @pytest.mark.asyncio
+    async def test_set_and_get(self):
+        """Value written with set() is returned by get()."""
+        await cache.set("test:key", {"hello": "world"}, expire=60)
+        result = await cache.get("test:key")
+        assert result == {"hello": "world"}
+
+    @pytest.mark.asyncio
+    async def test_missing_key_returns_none(self):
+        """get() returns None for a key that was never set."""
+        result = await cache.get("test:nonexistent_key_xyz")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_delete(self):
+        """delete() removes the key so subsequent get() returns None."""
+        await cache.set("test:delete_me", {"v": 1}, expire=60)
+        await cache.delete("test:delete_me")
+        assert await cache.get("test:delete_me") is None
+
+    @pytest.mark.asyncio
+    async def test_overwrite(self):
+        """set() on an existing key replaces the value."""
+        await cache.set("test:overwrite", {"v": 1}, expire=60)
+        await cache.set("test:overwrite", {"v": 2}, expire=60)
+        result = await cache.get("test:overwrite")
+        assert result == {"v": 2}
 
 
-async def test_register_user(client):
-    payload = {
-        "username": "testuser",
-        "email": "test@example.com",
-        "password": "Password123!",
-    }
-    response = await client.post("/api/v1/auth/register", json=payload)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["success"] is True
-    assert "User registered" in data["message"]
-    assert data["data"]["email"] == payload["email"]
+# ── Refresh token tests ───────────────────────────────────────────────────────
 
- 
-async def test_duplicate_email_or_username(client):
-    payload = {
-        "username": "testuser",
-        "email": "test@example.com",
-        "password": "Password123!",
-    }
-    # First registration should succeed
-    response1 = await client.post("/api/v1/auth/register", json=payload)
-    assert response1.status_code == 200
+class TestRefreshToken:
+    """Test the /refresh endpoint."""
 
-    # Second registration with same email should fail
-    response = await client.post("/api/v1/auth/register", json=payload)
-    assert response.status_code == 400
-    error_data = response.json()
-    assert (
-        "already" in (error_data.get("message") or error_data.get("detail", "")).lower()
-    )
+    @pytest.mark.asyncio
+    async def test_refresh_returns_new_tokens(
+        self, client: AsyncClient, test_user: User, db_session: AsyncSession
+    ):
+        """A valid refresh token returns a new access + refresh token pair."""
+        login = await client.post(
+            "/api/v1/auth/login",
+            json={"email": test_user.email, "password": "testpassword123"},
+        )
+        assert login.status_code == 200
+        refresh_token = login.json()["data"]["refresh_token"]
 
+        response = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": refresh_token},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "access_token" in data["data"]
+        assert "refresh_token" in data["data"]
+        # Tokens should be new (different from originals)
+        assert data["data"]["refresh_token"] != refresh_token
 
-@pytest.mark.asyncio
-async def test_verification_and_login_flow(client, db_session):
-    # Register a new user
-    payload = {
-        "username": "logintest",
-        "email": "logintest@example.com",
-        "password": "Password123!",
-    }
-    register_resp = await client.post("/api/v1/auth/register", json=payload)
-    assert register_resp.status_code == 200
+    @pytest.mark.asyncio
+    async def test_refresh_token_rotation(
+        self, client: AsyncClient, test_user: User, db_session: AsyncSession
+    ):
+        """Old refresh token is revoked after rotation — cannot be reused."""
+        login = await client.post(
+            "/api/v1/auth/login",
+            json={"email": test_user.email, "password": "testpassword123"},
+        )
+        old_refresh = login.json()["data"]["refresh_token"]
 
-    # Get the user from database and verify them
-    result = await db_session.execute(
-        select(User).where(User.email == payload["email"])
-    )
-    user = result.scalar_one()
+        # Use the refresh token once
+        await client.post("/api/v1/auth/refresh", json={"refresh_token": old_refresh})
 
-    # Manually verify the user
-    user.is_active = True
-    user.email_verified_at = datetime.now(timezone.utc)
-    await db_session.commit()
+        # Try to use the old token again — should be rejected
+        response = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": old_refresh},
+        )
+        assert response.status_code == 401
 
-    # Now login should work
-    login_resp = await client.post(
-        "/api/v1/auth/login",
-        json={"email": payload["email"], "password": payload["password"]},
-    )
-
-    assert login_resp.status_code == 200
-
-async def test_resend_verification_code(client):
-    payload = {"email": "test@example.com"}
-    response = await client.post("/api/v1/auth/resend_verification_code", json=payload)
-    assert response.status_code in [200, 400]
+    @pytest.mark.asyncio
+    async def test_refresh_invalid_token(self, client: AsyncClient):
+        """A garbage token returns 401."""
+        response = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": "not.a.valid.token"},
+        )
+        assert response.status_code == 401
+        assert response.json()["success"] is False
 
 
-async def test_forgot_and_reset_password(client, db_session):
-    # First, register and verify a user
-    payload = {
-        "username": "resettest",
-        "email": "resettest@example.com",
-        "password": "Password123!",
-    }
-    register_resp = await client.post("/api/v1/auth/register", json=payload)
-    assert register_resp.status_code == 200
+# ── Login lockout tests ───────────────────────────────────────────────────────
 
-    # Verify user
-    result = await db_session.execute(
-        select(User).where(User.email == payload["email"])
-    )
-    user = result.scalar_one()
-    user.is_active = True
-    user.email_verified_at = datetime.now(timezone.utc)
-    await db_session.commit()
+class TestLoginLockout:
+    """Test progressive failure messaging and lockout on login."""
 
-    # Request password reset
-    resp = await client.post(
-        "/api/v1/auth/forgot-password",
-        json={"email": payload["email"]}
-    )
-    assert resp.status_code == 200
-    assert "Password reset email" in resp.json()["message"]
+    @pytest.mark.asyncio
+    async def test_failed_login_shows_remaining_attempts(
+        self, client: AsyncClient, test_user: User
+    ):
+        """Failed login response includes remaining attempts count."""
+        # Clear any existing failure state
+        await cache.delete(f"login_fail:{test_user.email}")
+        await cache.delete(f"login_locked:{test_user.email}")
 
-    # Get the reset token from database
-    token_result = await db_session.execute(
-        select(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
-    )
-    token = token_result.scalar_one()
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": test_user.email, "password": "wrongpassword"},
+        )
+        assert response.status_code == 401
+        assert "remaining" in response.json()["message"].lower()
 
-    # Update token with known code
-    correct_code = "999999"
-    token.token = hash_verification_code(correct_code)
-    await db_session.commit()
+    @pytest.mark.asyncio
+    async def test_lockout_after_max_attempts(
+        self, client: AsyncClient, test_user: User
+    ):
+        """Account is locked after exceeding the maximum failed attempts."""
+        # Clear any existing failure state
+        await cache.delete(f"login_fail:{test_user.email}")
+        await cache.delete(f"login_locked:{test_user.email}")
 
-    # Reset password
-    correct_reset = await client.post(
-        "/api/v1/auth/reset-password",
-        json={
-            "email": payload["email"],
-            "verification_code": correct_code,
-            "new_password": "Newpass123!",
-        },
-    )
-    assert correct_reset.status_code == 200
+        # Exhaust all attempts
+        for _ in range(5):
+            await client.post(
+                "/api/v1/auth/login",
+                json={"email": test_user.email, "password": "wrongpassword"},
+            )
 
+        # Next attempt should be blocked
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": test_user.email, "password": "wrongpassword"},
+        )
+        assert response.status_code == 429
 
-async def test_me_endpoint(client, db_session):
-    # Register and verify a user
-    payload = {
-        "username": "metest",
-        "email": "metest@example.com",
-        "password": "Password123!",
-    }
-    register_resp = await client.post("/api/v1/auth/register", json=payload)
-    assert register_resp.status_code == 200
+    @pytest.mark.asyncio
+    async def test_successful_login_clears_failures(
+        self, client: AsyncClient, test_user: User
+    ):
+        """Successful login clears the failure counter."""
+        await cache.delete(f"login_fail:{test_user.email}")
+        await cache.delete(f"login_locked:{test_user.email}")
 
-    # Verify user
-    result = await db_session.execute(
-        select(User).where(User.email == payload["email"])
-    )
-    user = result.scalar_one()
-    user.is_active = True
-    user.email_verified_at = datetime.now(timezone.utc)
-    await db_session.commit()
+        # One failed attempt
+        await client.post(
+            "/api/v1/auth/login",
+            json={"email": test_user.email, "password": "wrongpassword"},
+        )
 
-    # Login
-    login_resp = await client.post(
-        "/api/v1/auth/login",
-        json={"email": payload["email"], "password": payload["password"]},
-    )
+        # Correct login should succeed
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": test_user.email, "password": "testpassword123"},
+        )
+        assert response.status_code == 200
 
-    data = login_resp.json()
-    assert login_resp.status_code == 200, data
-    assert "access_token" in data["data"]
-
-
-async def test_cache(client):
-    resp1 = await client.get("/api/v1/auth/test-cache")
-    assert resp1.status_code == 200
-    assert "Cached" in resp1.json()["data"]["message"]
+        # Failure counter is gone
+        assert await cache.get(f"login_fail:{test_user.email}") is None

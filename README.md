@@ -194,6 +194,7 @@ All options are set in `.env`. See `.env.example` for the full template.
 | `DEBUG` | `true` | FastAPI debug mode |
 | `ENVIRONMENT` | `development` | `development`, `test`, `staging`, `production` |
 | `ALLOWED_ORIGINS` | `*` | CORS origins — comma-separated URLs or `*` for all |
+| `ALLOWED_HOSTS` | `*` | Trusted hostnames — comma-separated or `*` to allow all. Set in production (e.g. `yourdomain.com`) |
 
 ### Database
 
@@ -207,7 +208,7 @@ All options are set in `.env`. See `.env.example` for the full template.
 | Variable | Default | Options | Description |
 |---|---|---|---|
 | `CACHE_TYPE` | `inmemory` | `inmemory`, `redis`, `database` | Caching backend |
-| `REDIS_URL` | `redis://localhost:6379/0` | — | Required when `CACHE_TYPE=redis` |
+| `REDIS_URL` | `redis://localhost:6379/0` | — | Required when `CACHE_TYPE=redis`. With password: `redis://:yourpassword@host:6379/0` |
 
 ### Rate limiting
 

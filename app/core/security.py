@@ -6,10 +6,9 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 
-# from passlib.context import CryptContext
 import bcrypt
 from pydantic import BaseModel
-import hashlib  # Added for SHA-256
+import hashlib
 from random import randint
 
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
@@ -17,7 +16,6 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from app.core.config import settings
 from app.core.dependencies import get_db
 
-# pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 
 

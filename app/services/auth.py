@@ -16,6 +16,16 @@ from app.core.security import (
 from app.db.models.user import User
 from app.db.models.tokens import PasswordResetToken
 from app.services.token import TokenService, ensure_timezone_aware
+from app.utils.caching import cache
+
+# ── Lockout configuration ──────────────────────────────────────────────────
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_WINDOW_SECONDS = 15 * 60   # 15-minute sliding window
+LOGIN_LOCKOUT_SECONDS = 15 * 60  # 15-minute lockout
+
+RESEND_MAX_ATTEMPTS = 3
+RESEND_WINDOW_SECONDS = 10 * 60  # 10-minute sliding window
+RESEND_LOCKOUT_SECONDS = 10 * 60
 
 
 class AuthService:
@@ -25,16 +35,67 @@ class AuthService:
         self.db = db
         self.token_service = TokenService()
 
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
+    async def _check_lockout(self, lock_key: str) -> None:
+        """Raise 429 if the lockout key is present in cache."""
+        locked = await cache.get(lock_key, db=self.db)
+        if locked:
+            locked_until = locked.get("locked_until", "a few minutes")
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Too many attempts. Try again after {locked_until}.",
+            )
+
+    async def _record_failure(
+        self,
+        fail_key: str,
+        lock_key: str,
+        max_attempts: int,
+        window_seconds: int,
+        lockout_seconds: int,
+        locked_message: str,
+    ) -> int:
+        """
+        Increment the failure counter. If max_attempts is reached, set a
+        lockout and clear the counter.
+
+        Returns:
+            Remaining attempts before lockout (0 when lockout is set).
+        """
+        data = await cache.get(fail_key, db=self.db) or {"count": 0}
+        data["count"] += 1
+        remaining = max_attempts - data["count"]
+
+        if data["count"] >= max_attempts:
+            locked_until = datetime.now(timezone.utc) + timedelta(seconds=lockout_seconds)
+            await cache.set(
+                lock_key,
+                {"locked_until": locked_until.strftime("%H:%M UTC")},
+                expire=lockout_seconds,
+                db=self.db,
+            )
+            await cache.delete(fail_key, db=self.db)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=locked_message,
+            )
+
+        await cache.set(fail_key, data, expire=window_seconds, db=self.db)
+        return remaining
+
+    async def _clear_failures(self, fail_key: str, lock_key: str) -> None:
+        """Clear failure counter and any lockout for an email."""
+        await cache.delete(fail_key, db=self.db)
+        await cache.delete(lock_key, db=self.db)
+
+    # ── Public methods ────────────────────────────────────────────────────────
+
     async def register_user(
         self, username: str, email: str, password: str
     ) -> Tuple[User, str]:
         """
-        Register a new user
-
-        Args:
-            username: User's username
-            email: User's email
-            password: Plain text password
+        Register a new user.
 
         Returns:
             Tuple of (User, verification_code)
@@ -42,7 +103,6 @@ class AuthService:
         Raises:
             HTTPException: If username or email already exists
         """
-        # Check if username or email already exists
         result = await self.db.execute(
             select(User).where((User.username == username) | (User.email == email))
         )
@@ -60,15 +120,11 @@ class AuthService:
                     detail="Email already registered",
                 )
 
-        # Hash password
         hashed_password = get_password_hash(password)
-
-        # Generate verification code
         verification_code = generate_verification_code()
         hashed_code = hash_verification_code(verification_code)
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
 
-        # Create user
         new_user = User(
             username=username,
             email=email,
@@ -85,14 +141,7 @@ class AuthService:
 
     async def verify_account(self, email: str, code: str) -> User:
         """
-        Verify user account with verification code
-
-        Args:
-            email: User's email
-            code: 6-digit verification code
-
-        Returns:
-            Verified User object
+        Verify user account with verification code.
 
         Raises:
             HTTPException: If verification fails
@@ -108,22 +157,19 @@ class AuthService:
                 detail="Invalid email or already verified",
             )
 
-        # Check expiration
         expires_at = ensure_timezone_aware(user.verification_code_expires_at)
         if expires_at < datetime.now(timezone.utc):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Verification code expired, kindly request a fresh verification code",
+                detail="Verification code expired. Request a fresh code.",
             )
 
-        # Verify code
         if not verify_verification_code(user.verification_code, code):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid verification code",
             )
 
-        # Mark as active
         user.is_active = True
         user.email_verified_at = datetime.now(timezone.utc)
         user.verification_code = None
@@ -136,17 +182,19 @@ class AuthService:
 
     async def resend_verification_code(self, email: str) -> str:
         """
-        Resend verification code to user
-
-        Args:
-            email: User's email
+        Resend verification code with abuse protection.
 
         Returns:
             New verification code
 
         Raises:
-            HTTPException: If user not found or already verified
+            HTTPException: If user not found, already verified, or locked out
         """
+        fail_key = f"resend_fail:{email}"
+        lock_key = f"resend_locked:{email}"
+
+        await self._check_lockout(lock_key)
+
         result = await self.db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
 
@@ -162,7 +210,18 @@ class AuthService:
                 detail="Account has been previously verified",
             )
 
-        # Generate new code
+        remaining = await self._record_failure(
+            fail_key=fail_key,
+            lock_key=lock_key,
+            max_attempts=RESEND_MAX_ATTEMPTS,
+            window_seconds=RESEND_WINDOW_SECONDS,
+            lockout_seconds=RESEND_LOCKOUT_SECONDS,
+            locked_message=(
+                f"Too many resend attempts. "
+                f"Wait {RESEND_LOCKOUT_SECONDS // 60} minutes before trying again."
+            ),
+        )
+
         verification_code = generate_verification_code()
         hashed_code = hash_verification_code(verification_code)
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
@@ -184,50 +243,62 @@ class AuthService:
         device_name: str = None,
     ) -> Tuple[User, str, str]:
         """
-        Authenticate user and create tokens
-
-        Args:
-            email: User's email
-            password: Plain text password
-            ip_address: Client IP address
-            user_agent: Client user agent
-            device_name: Device name
+        Authenticate user and create tokens with lockout protection.
 
         Returns:
             Tuple of (User, access_token, refresh_token)
 
         Raises:
-            HTTPException: If authentication fails
+            HTTPException: If authentication fails or account is locked out
         """
-        # Get user
+        fail_key = f"login_fail:{email}"
+        lock_key = f"login_locked:{email}"
+
+        await self._check_lockout(lock_key)
+
         result = await self.db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
 
-        # Verify credentials
         if not user or not verify_password(password, user.hashed_password):
+            remaining = await self._record_failure(
+                fail_key=fail_key,
+                lock_key=lock_key,
+                max_attempts=LOGIN_MAX_ATTEMPTS,
+                window_seconds=LOGIN_WINDOW_SECONDS,
+                lockout_seconds=LOGIN_LOCKOUT_SECONDS,
+                locked_message=(
+                    f"Account locked for {LOGIN_LOCKOUT_SECONDS // 60} minutes "
+                    f"due to too many failed login attempts."
+                ),
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password",
+                detail=(
+                    f"Incorrect email or password. "
+                    f"{remaining} attempt(s) remaining before lockout."
+                ),
             )
 
-        # Check if account is verified
         if not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Account is yet to be verified, kindly verify your account",
+                detail="Account is not verified. Check your email.",
             )
 
-        # Create access token
-        access_token_str, access_token_record = await self.token_service.create_access_token(
-            user_id=user.id,
-            email=user.email,
-            db=self.db,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            device_name=device_name,
+        # Success — clear any existing failure tracking
+        await self._clear_failures(fail_key, lock_key)
+
+        access_token_str, access_token_record = (
+            await self.token_service.create_access_token(
+                user_id=user.id,
+                email=user.email,
+                db=self.db,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                device_name=device_name,
+            )
         )
 
-        # Create refresh token
         refresh_token_str, _ = await self.token_service.create_refresh_token(
             user_id=user.id,
             access_token_id=access_token_record.id,
@@ -240,10 +311,7 @@ class AuthService:
 
     async def request_password_reset(self, email: str) -> str:
         """
-        Request password reset code
-
-        Args:
-            email: User's email
+        Request password reset code.
 
         Returns:
             Password reset code
@@ -260,17 +328,14 @@ class AuthService:
                 detail="Invalid email address",
             )
 
-        # Delete existing reset tokens for this user
         await self.db.execute(
             delete(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
         )
 
-        # Generate reset code
         reset_code = generate_verification_code()
         hashed_code = hash_verification_code(reset_code)
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
 
-        # Create reset token
         reset_token = PasswordResetToken(
             token=hashed_code,
             user_id=user.id,
@@ -286,20 +351,11 @@ class AuthService:
         self, email: str, code: str, new_password: str
     ) -> User:
         """
-        Reset password with verification code
-
-        Args:
-            email: User's email
-            code: Password reset code
-            new_password: New plain text password
-
-        Returns:
-            Updated User object
+        Reset password with verification code. Clears any login lockout.
 
         Raises:
             HTTPException: If reset fails
         """
-        # Find user
         user_result = await self.db.execute(select(User).where(User.email == email))
         user = user_result.scalar_one_or_none()
 
@@ -309,7 +365,6 @@ class AuthService:
                 detail="Invalid email address",
             )
 
-        # Get latest reset token
         token_result = await self.db.execute(
             select(PasswordResetToken)
             .where(PasswordResetToken.user_id == user.id)
@@ -324,14 +379,12 @@ class AuthService:
                 detail="No reset code found for this user",
             )
 
-        # Verify code
         if not verify_verification_code(reset_token.token, code):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid verification code",
             )
 
-        # Check expiration
         expires_at = ensure_timezone_aware(reset_token.expires_at)
         if expires_at < datetime.now(timezone.utc):
             raise HTTPException(
@@ -339,56 +392,33 @@ class AuthService:
                 detail="Reset code has expired",
             )
 
-        # Check if already used
         if reset_token.used_at is not None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="This reset code has already been used",
             )
 
-        # Update password
         user.hashed_password = get_password_hash(new_password)
         user.updated_at = datetime.now(timezone.utc)
-
-        # Mark token as used
         reset_token.used_at = datetime.now(timezone.utc)
 
         await self.db.flush()
         await self.db.refresh(user)
 
+        # Clear login lockout so the user can log in with the new password
+        await self._clear_failures(
+            fail_key=f"login_fail:{email}",
+            lock_key=f"login_locked:{email}",
+        )
+
         return user
 
     async def logout(self, token: str) -> bool:
-        """
-        Logout by revoking the current token
-
-        Args:
-            token: JWT access token
-
-        Returns:
-            True if successful
-
-        Raises:
-            HTTPException: If token is invalid
-        """
-        # Validate and get token record
+        """Revoke the current access token."""
         _, token_record = await self.token_service.validate_token(token, self.db)
-
-        # Revoke token
         token_hash = self.token_service._hash_token(token)
-        revoked = await self.token_service.revoke_token(token_hash, self.db)
-
-        return revoked
+        return await self.token_service.revoke_token(token_hash, self.db)
 
     async def logout_all_devices(self, user_id: uuid.UUID) -> int:
-        """
-        Logout from all devices by revoking all user tokens
-
-        Args:
-            user_id: User's UUID
-
-        Returns:
-            Number of tokens revoked
-        """
-        count = await self.token_service.revoke_all_user_tokens(user_id, self.db)
-        return count
+        """Revoke all tokens for a user (logout all devices)."""
+        return await self.token_service.revoke_all_user_tokens(user_id, self.db)
