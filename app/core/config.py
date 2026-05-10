@@ -33,8 +33,6 @@ class Settings(BaseSettings):
 
     # File Upload Settings
     UPLOAD_DIR: str = "uploads"
-    MAX_UPLOAD_SIZE_MB: int = 10
-    ALLOWED_UPLOAD_TYPES: str = "image/jpeg,image/png,image/gif,image/webp,application/pdf"
 
     EMAIL_HOST: str
     EMAIL_PORT: int
@@ -45,8 +43,6 @@ class Settings(BaseSettings):
     MAIL_SSL_TLS: bool = False
     TEMPLATE_FOLDER: str = str(BASE_DIR / "templates" / "emails")
     SUPPRESS_SEND: int = 0
-    LOG_LEVEL: str = "INFO"
-    LOG_FILE_PATH: str = "logs/app.log"
 
     # Parse ALLOWED_ORIGINS
     @property

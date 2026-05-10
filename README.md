@@ -1,88 +1,109 @@
 # FastAPI Skeleton
 
-A modular, secure, and scalable FastAPI project template.
-
-## Setup
-
-1. Create virtual environment: `python -m venv venv && venv\Scripts\activate`
-2. Install dependencies: `pip install -r requirements.txt`
-3. Copy `.env.example` to `.env` and configure.
-4. Initialize Alembic: `alembic init migrations`
-5. Generate migration: `alembic revision --autogenerate -m "Initial migration"`
-6. Apply migration: `alembic upgrade head`
-7. Run: `uvicorn main:app --reload`
-8. Access Swagger UI: `http://localhost:8000/docs`
-
-## Features
-
-- Database: PostgreSQL/SQLite with SQLAlchemy (async).
-- Caching: In-memory (default) or Redis (configurable via `.env`).
-- Authentication: JWT with OAuth2.
-- Email: Async email sending.
-- Logging: Loguru with file rotation.
-- Responses: Reusable success/error responses.
-# FastAPI Skeleton
-
 A modular, secure, and scalable FastAPI project template — ready for development and production.
+
+![GitHub stars](https://img.shields.io/github/stars/Mayejacob/fastapi-skeleton?style=flat-square)
+![GitHub forks](https://img.shields.io/github/forks/Mayejacob/fastapi-skeleton?style=flat-square)
+![GitHub watchers](https://img.shields.io/github/watchers/Mayejacob/fastapi-skeleton?style=flat-square)
+![GitHub issues](https://img.shields.io/github/issues/Mayejacob/fastapi-skeleton?style=flat-square)
+![GitHub license](https://img.shields.io/github/license/Mayejacob/fastapi-skeleton?style=flat-square)
+![Python version](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)
 
 ## Table of contents
 
 - [Features](#features)
 - [Prerequisites](#prerequisites)
-- [Quick install](#quick-install)
-  - [Using pip (traditional)](#using-pip-traditional)
-  - [Using uv (faster, recommended)](#using-uv-faster-recommended)
-- [Environment](#environment)
+- [Quick setup](#quick-setup)
+- [Manual setup](#manual-setup)
+  - [Using pip](#using-pip)
+  - [Using uv (recommended)](#using-uv-recommended)
+- [Configuration reference](#configuration-reference)
 - [Database & migrations](#database--migrations)
 - [Seeding](#seeding)
-- [Run options (development & production)](#run-options-development--production)
+- [Run options](#run-options)
 - [Tests](#tests)
-- [Deploying / start scripts](#deploying--start-scripts)
-- [Notes](#notes)
+- [Deploying](#deploying)
 - [Live demo](#live-demo)
 - [Author](#author)
 
+---
+
 ## Features
 
-- Async SQLAlchemy models (Postgres / SQLite)
-- JWT authentication (OAuth2)
-- Optional Redis caching and rate-limiting
-- Async email sending
+- Async SQLAlchemy models (PostgreSQL / SQLite)
+- JWT authentication with OAuth2
+- Multi-backend caching: in-memory, Redis, or database
+- Optional Redis-based rate limiting
+- Async email sending with Jinja2 templates
 - Alembic migrations
-- Pytest test suite
+- Seeder system with auto-discovery and environment filtering
+- Pytest test suite with async support and HTML reports
+- Loguru logging with file rotation
+- APScheduler for background tasks
+
+---
 
 ## Prerequisites
 
 - Python 3.10+
-- PostgreSQL (recommended for production) or SQLite for local development
-- Redis (optional; required if you enable rate limiting or Redis cache)
+- PostgreSQL (recommended) or SQLite (local dev)
+- Redis (optional — required only for Redis cache or rate limiting)
 
-## Quick install
+---
 
-Choose your preferred package manager:
+## Quick setup
 
-### Get started fast (if not starting from scratch)
-
-If you've already cloned the repo and just want to jump into a working environment quickly, use the following `uv`-based flow.
+The fastest way to get started after cloning. The setup script interactively asks for your app name, database, cache type, and other settings, then generates a configured `.env` for you.
 
 ```bash
-# 1. Create virtual environment with uv
-uv venv
+git clone https://github.com/Mayejacob/fastapi-skeleton.git
+cd fastapi-skeleton
 
-# 2. Activate it
-source .venv/bin/activate  # macOS/Linux
-# On Windows: .venv\Scripts\activate
+# Create and activate a virtual environment
+python -m venv venv
+source venv/bin/activate      # macOS / Linux
+# On Windows: venv\Scripts\activate
 
-# 3. Install all dependencies from pyproject.toml
-uv pip install -e .
+# Install dependencies
+pip install -r requirements.txt
 
-# That's it! No need for requirements.txt
+# Run the interactive setup (generates .env)
+python setup.py
+
+# Apply migrations and start
+alembic upgrade head
+uvicorn main:app --reload
 ```
 
+Or with `uv`:
 
-### Using pip (traditional)
+```bash
+git clone https://github.com/Mayejacob/fastapi-skeleton.git
+cd fastapi-skeleton
 
-1. Clone the repo
+uv venv && source .venv/bin/activate
+uv pip install -e .
+
+python setup.py   # or: uv run python setup.py
+
+alembic upgrade head
+uvicorn main:app --reload
+```
+
+Once running:
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+- Health check: http://localhost:8000/health
+
+---
+
+## Manual setup
+
+If you prefer to configure `.env` yourself instead of using the setup script.
+
+### Using pip
+
+1. Clone and enter the repo
 
 ```bash
 git clone https://github.com/Mayejacob/fastapi-skeleton.git
@@ -103,415 +124,285 @@ source venv/bin/activate   # macOS / Linux
 pip install -r requirements.txt
 ```
 
-4. Create `.env` from the example
+4. Create `.env` and generate a secret key
 
 ```bash
 cp .env.example .env
-# Edit .env with your configuration
+python generate_secret.py
+# Paste the output into .env as SECRET_KEY
 ```
 
-5. Generate a SECRET_KEY
+5. Apply migrations
 
 ```bash
-python generate_secret.py
-# Copy the printed value into .env as SECRET_KEY
+alembic upgrade head
 ```
 
-### Using uv (faster, recommended)
+### Using uv (recommended)
 
-`uv` is a next-generation Python package manager that's much faster than pip.
+`uv` is a faster Python package manager.
 
-1. Install uv (if not already installed):
+1. Install uv (if not already installed)
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
-# or pip install uv
 # On Windows: powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-2. Clone the repo
+2. Clone and set up
 
 ```bash
 git clone https://github.com/Mayejacob/fastapi-skeleton.git
 cd fastapi-skeleton
-```
 
-```bash
-uv init
-
-uv add -r requirements.in
-```
-
-3. Create virtual environment and install dependencies
-
-```bash
-# Create environment with Python 3.11 (recommended for stability)
 uv venv --python 3.11
 source .venv/bin/activate   # macOS / Linux
 # On Windows: .venv\Scripts\activate
 
-# Install all dependencies from requirements.txt
-uv pip install -r requirements.txt
+uv pip install -e .
 ```
 
-4. Create `.env` from the example and generate SECRET_KEY
+3. Create `.env` and generate a secret key
 
 ```bash
 cp .env.example .env
 uv run python generate_secret.py
-# Copy the printed value into .env as SECRET_KEY
+# Paste the output into .env as SECRET_KEY
 ```
 
-💡 uv tips:
-
-- Use `uv run <command>` to run commands without activating the virtual environment
-
-Example: `uv run alembic upgrade head` or `uv run uvicorn main:app --reload`
-
-- Update dependencies with `uv pip install --upgrade <package>`
-
-## Environment
-
-Edit `.env` with your configuration:
+4. Apply migrations
 
 ```bash
-# Database (choose one)
-DATABASE_URL=postgresql+asyncpg://user:pass@localhost/dbname   # PostgreSQL
-# DATABASE_URL=sqlite+aiosqlite:///db.sqlite                   # SQLite (local dev)
-
-# Security
-SECRET_KEY=your-secret-key-here  # Generate with python generate_secret.py
-
-# Optional: Redis (for caching/rate limiting)
-REDIS_URL=redis://localhost:6379/0
-CACHE_TYPE=redis                  # or 'inmemory'
-RATE_LIMIT_ENABLED=true
-
-# Email (optional)
-MAIL_USERNAME=your-email@gmail.com
-MAIL_PASSWORD=your-app-password
-MAIL_FROM=noreply@example.com
+uv run alembic upgrade head
 ```
+
+> **Tip:** Use `uv run <command>` to run commands without activating the virtual environment, e.g. `uv run uvicorn main:app --reload`.
+
+---
+
+## Configuration reference
+
+All options are set in `.env`. See `.env.example` for the full template.
+
+### App
+
+| Variable | Default | Description |
+|---|---|---|
+| `APP_NAME` | `My FastAPI App` | Application name shown in docs |
+| `APP_URL` | `http://localhost:8000` | Base URL of the application |
+| `PROJECT_VERSION` | `1.0.0` | API version shown in docs |
+| `DEBUG` | `true` | FastAPI debug mode |
+| `ENVIRONMENT` | `development` | `development`, `test`, `staging`, `production` |
+| `ALLOWED_ORIGINS` | `*` | CORS origins — comma-separated URLs or `*` for all |
+
+### Database
+
+| Variable | Example | Description |
+|---|---|---|
+| `DATABASE_URL` | — | PostgreSQL: `postgresql+asyncpg://user:pass@host:5432/db` |
+| | | SQLite: `sqlite+aiosqlite:///db.sqlite` |
+
+### Cache
+
+| Variable | Default | Options | Description |
+|---|---|---|---|
+| `CACHE_TYPE` | `inmemory` | `inmemory`, `redis`, `database` | Caching backend |
+| `REDIS_URL` | `redis://localhost:6379/0` | — | Required when `CACHE_TYPE=redis` |
+
+### Rate limiting
+
+| Variable | Default | Description |
+|---|---|---|
+| `RATE_LIMIT_ENABLED` | `false` | `true` requires a working `REDIS_URL` |
+
+### Security
+
+| Variable | Default | Description |
+|---|---|---|
+| `SECRET_KEY` | — | Generate with `python generate_secret.py` |
+| `ALGORITHM` | `HS256` | JWT signing algorithm |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access token lifetime |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Refresh token lifetime |
+
+### File upload
+
+| Variable | Default | Description |
+|---|---|---|
+| `UPLOAD_DIR` | `uploads` | Directory where uploaded files are stored |
+
+### Email
+
+| Variable | Default | Description |
+|---|---|---|
+| `EMAIL_HOST` | `smtp.example.com` | SMTP server host |
+| `EMAIL_PORT` | `587` | SMTP port (587 for STARTTLS, 465 for SSL) |
+| `EMAIL_USERNAME` | — | SMTP login username |
+| `EMAIL_PASSWORD` | — | SMTP login password |
+| `EMAIL_FROM` | — | Sender address |
+| `MAIL_STARTTLS` | `True` | Use STARTTLS (port 587) |
+| `MAIL_SSL_TLS` | `False` | Use SSL/TLS (port 465) |
+| `TEMPLATE_FOLDER` | `templates/emails` | Path to Jinja2 email templates |
+| `SUPPRESS_SEND` | `0` | Set to `1` to mock sending (useful in development) |
+
+---
 
 ## Database & migrations
 
-With pip:
-
 ```bash
-# Generate initial migration
-alembic revision --autogenerate -m "Initial migration"
+# Generate a new migration after changing models
+alembic revision --autogenerate -m "describe your change"
 
-# Apply migrations
+# Apply all pending migrations
 alembic upgrade head
 
-# Rollback last migration
+# Roll back the last migration
 alembic downgrade -1
 ```
 
-With uv:
+With uv, prefix each command with `uv run`.
 
-```bash
-# Generate initial migration
-uv run alembic revision --autogenerate -m "Initial migration"
-
-# Apply migrations
-uv run alembic upgrade head
-
-# Rollback last migration
-uv run alembic downgrade -1
-```
+---
 
 ## Seeding
 
-### Running Seeders
+### Running seeders
 
 ```bash
-# Run all seeders (auto-discovers and runs in order)
+# Run all seeders (auto-discovered, ordered)
 python seed.py
 
 # Run a specific seeder
 python seed.py UserSeeder
 
-# Run in a specific environment
+# Run for a specific environment
 python seed.py --env=production
 
 # Show help
 python seed.py --help
 ```
 
-### Expected Output
+### Creating a seeder
 
-```
-INFO: Running all seeders...
-INFO: Discovered 1 seeder(s) for environment: development
-INFO: Running 1 seeder(s)...
-INFO: → Running UserSeeder...
-  ✓ Created user: admin@example.com (password: admin123)
-  ✓ Created user: test@example.com (password: test123)
-  ✓ Created user: john@example.com (password: john123)
-INFO: ✓ UserSeeder completed successfully
-INFO: All seeders completed!
-INFO: Seeding completed successfully!
-```
-
----
-
-## 📝 Creating Your Own Seeder
-
-### Step 1: Create the Seeder File
-
-Create a new file in `app/db/seeders/`. The filename should end with `_seeder.py` (convention).
-
-**Example:** `app/db/seeders/post_seeder.py`
+Create a file in `app/db/seeders/` ending in `_seeder.py`:
 
 ```python
-from datetime import datetime, timezone
-from sqlalchemy import select
-
 from app.db.seeders.base import BaseSeeder
 from app.db.models.user import User
-from app.db.models.post import Post  # Your model
+from sqlalchemy import select
 
 
 class PostSeeder(BaseSeeder):
-  """Seed sample blog posts"""
+    order = 20                             # lower numbers run first
+    environments = ["development", "test"] # omit to run everywhere
 
-  # Execution order (lower numbers run first)
-  # UserSeeder is 10, so posts should come after users
-  order = 20
+    async def seed(self) -> None:
+        result = await self.db.execute(select(User).where(User.email == "admin@example.com"))
+        admin = result.scalar_one_or_none()
+        if not admin:
+            print("  ⚠ Admin user not found, skipping")
+            return
 
-  # Environments where this should run
-  # Don't seed posts in production!
-  environments = ["development", "test"]
-
-  async def seed(self) -> None:
-    """Create sample posts"""
-
-    # Get a user to associate posts with
-    result = await self.db.execute(
-      select(User).where(User.email == "admin@example.com")
-    )
-    admin_user = result.scalar_one_or_none()
-
-    if not admin_user:
-      print("  ⚠ Admin user not found, skipping post seeding")
-      return
-
-    # Sample posts
-    posts_data = [
-      {
-        "title": "Welcome to FastAPI",
-        "content": "This is a sample blog post...",
-        "user_id": admin_user.id,
-      },
-      {
-        "title": "Building RESTful APIs",
-        "content": "FastAPI makes it easy...",
-        "user_id": admin_user.id,
-      },
-    ]
-
-    for post_data in posts_data:
-      # Check if post exists (by title)
-      result = await self.db.execute(
-        select(Post).where(Post.title == post_data["title"])
-      )
-      existing_post = result.scalar_one_or_none()
-
-      if existing_post:
-        print(f"  ⊙ Post already exists: {post_data['title']}")
-        continue
-
-      # Create new post
-      post = Post(**post_data)
-      self.db.add(post)
-      print(f"  ✓ Created post: {post_data['title']}")
-
-    # Flush changes (commit happens automatically in base class)
-    await self.db.flush()
+        # add your records here
+        await self.db.flush()
 ```
 
-### Step 2: Run Your Seeder
+The seeder is **automatically discovered** the next time you run `python seed.py`.
 
-The seeder will be **automatically discovered** when you run:
+### Order conventions
 
-```bash
-python seed.py
-```
+| Range | Use for |
+|---|---|
+| 1 – 10 | System / config data |
+| 10 – 20 | Users, roles, permissions |
+| 20 – 30 | Main content (posts, products, …) |
+| 30 – 40 | Related content (comments, reviews, …) |
+| 40+ | Analytics, logs, … |
 
-Or run it specifically:
+### Output emoji convention
 
-```bash
-python seed.py PostSeeder
-```
+| Symbol | Meaning |
+|---|---|
+| `→` | Starting |
+| `✓` | Created |
+| `⊙` | Already exists (skipped) |
+| `⚠` | Warning |
+| `✗` | Error |
 
 ---
 
-## 🎯 Seeder Best Practices
-
-### 1. **Always Check if Data Exists**
-
-Make seeders idempotent (safe to run multiple times):
-
-```python
-# Create only if doesn't exist
-user = User(**user_data)
-self.db.add(user)
-```
-
-### 2. **Use Execution Order Wisely**
-
-Order matters when seeders depend on each other:
-
-```python
-# UserSeeder should run first
-class UserSeeder(BaseSeeder):
-  order = 10  # Lower = runs first
-
-# PostSeeder needs users to exist
-class PostSeeder(BaseSeeder):
-  order = 20  # Runs after users
-
-# CommentSeeder needs posts to exist
-class CommentSeeder(BaseSeeder):
-  order = 30  # Runs after posts
-```
-
-**Common Order Convention:**
-- **1-10:** System/configuration data
-- **10-20:** Users, roles, permissions
-- **20-30:** Main content (posts, products, etc.)
-- **30-40:** Related content (comments, reviews, etc.)
-- **40+:** Analytics, logs, etc.
-
-### 3. **Use Environment Filtering**
-
-```python
-class UserSeeder(BaseSeeder):
-  # Only run in dev and test
-  environments = ["development", "test"]
-
-class SystemConfigSeeder(BaseSeeder):
-  # Run in all environments
-  environments = ["development", "test", "staging", "production"]
-
-class DemoDataSeeder(BaseSeeder):
-  # Only in development
-  environments = ["development"]
-```
-
-### 4. **Provide Helpful Output**
-
-**Emoji Convention:**
-- `→` Starting a task
-- `✓` Success
-- `⊙` Already exists (skipped)
-- `⚠` Warning
-- `✗` Error
-
-
-## Run options (development & production)
+## Run options
 
 ### Development (auto-reload)
 
-With pip:
-
 ```bash
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-With uv:
-
-```bash
+# or
 uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Access:
-
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
-- Health check: http://localhost:8000/health
-
-### Production (with Gunicorn)
+### Production (Gunicorn + Uvicorn workers)
 
 ```bash
-# With pip
 gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
-
-# With uv
+# or
 uv run gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 ```
 
-Adjust `-w` (worker count) to match your CPU cores.
+Adjust `-w` to match your CPU core count.
+
+---
 
 ## Tests
 
-Run the test suite:
-
-With pip:
-
 ```bash
+# Run all tests
 pytest -v
-pytest tests/test_token_service.py          # Single file
-pytest tests/test_token_service.py::test_create_access_token  # Single test
-```
 
-With uv:
+# Single file
+pytest tests/test_token_service.py
 
-```bash
-uv run pytest -v
-uv run pytest tests/test_token_service.py   # Single file
-```
+# Single test
+pytest tests/test_token_service.py::test_create_access_token
 
-With coverage:
-
-```bash
-# pip
+# With coverage
 pytest --cov=app --cov-report=html
-
-# uv
-uv run pytest --cov=app --cov-report=html
 ```
 
-## Deploying / start scripts
+Prefix with `uv run` when using uv.
 
-The repo contains a start.sh for hosting providers (e.g., Render). For uv-based deployments, update it to:
+---
+
+## Deploying
+
+The repo includes `start.sh` for any hosting provider (Render, Railway, Fly.io, VPS, etc.). It runs migrations then starts Gunicorn:
 
 ```bash
 #!/usr/bin/env bash
 set -e
 
-echo "🚀 Starting deployment process with uv..."
-uv run alembic upgrade head
+python -m alembic upgrade head
+exec gunicorn -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:$PORT
+```
+
+`python -m alembic` is used instead of the bare `alembic` binary to ensure the same Python environment that runs the app is also used for migrations — regardless of how the host activates the virtualenv.
+
+For uv-based deployments, replace the above with:
+
+```bash
+uv run python -m alembic upgrade head
 exec uv run gunicorn -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:$PORT
 ```
 
-Or for simpler deployments:
-
-```bash
-uv run uvicorn main:app --host 0.0.0.0 --port $PORT
-```
-
-## Notes
-
-- Python version: Python 3.11 is recommended for stability with uv. Python 3.14 is not yet fully supported.
-
-- Caching: Set `CACHE_TYPE=inmemory` (default) or `CACHE_TYPE=redis` and configure `REDIS_URL`.
-
-- Database URLs: postgresql+asyncpg://... for Postgres, sqlite+aiosqlite:///db.sqlite for local dev.
-
-- Security: Keep SECRET_KEY secret. Generate with openssl rand -hex 32 or python generate_secret.py.
-
-- Rate limiting: To enable, set RATE_LIMIT_ENABLED=true and provide a working REDIS_URL.
+---
 
 ## Live demo
 
-Live demo: https://fastapi-skeleton-nsr7.onrender.com
+https://fastapi-skeleton-nsr7.onrender.com
+
+---
 
 ## Author
 
-Jacob Olorunmaye
-
-GitHub: https://github.com/Mayejacob
-
+Jacob Olorunmaye  
+GitHub: https://github.com/Mayejacob  
 Website: https://mayeconcept.com.ng

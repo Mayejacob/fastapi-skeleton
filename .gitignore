@@ -13,3 +13,4 @@ logs/
 *.egg-info/
 *.egg
 *.egg-info/*
+.env.bak
